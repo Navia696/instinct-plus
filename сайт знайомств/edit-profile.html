@@ -1,0 +1,278 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+  <meta charset="UTF-8">
+  <title>Instinct+ — Редагування профілю</title>
+  <link rel="stylesheet" href="style.css">
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-database-compat.js"></script>
+  <script src="firebase-init.js"></script>
+</head>
+
+<body class="edit-page" style="visibility:hidden">
+
+<div class="inner-bg"></div>
+
+<header class="topbar">
+  <h1>Instinct+</h1>
+  <button class="btn logout" onclick="logout()">Вийти</button>
+</header>
+
+<div class="edit-container">
+
+  <div class="edit-card">
+
+    <h2>Редагувати профіль</h2>
+
+    <div class="field-group">
+      <label>Нікнейм</label>
+      <input id="nickname" type="text">
+    </div>
+
+    <div class="field-group">
+      <label>Вік</label>
+      <input id="age" type="number" min="12">
+    </div>
+
+    <div class="field-group">
+      <label>Опис</label>
+      <textarea id="bio" rows="3"></textarea>
+    </div>
+
+    <div class="field-group">
+      <label>Інтереси</label>
+      <textarea id="interests" rows="3"></textarea>
+    </div>
+
+    <div class="preview-row">
+      <div class="preview-block">
+        <h4>Поточна аватарка</h4>
+        <img id="avatarPreview" class="avatar-preview-img" src="img/user.png" style="width:120px;height:120px;border-radius:8px;object-fit:cover;">
+      </div>
+      <div class="preview-block">
+        <h4>Поточна обкладинка</h4>
+        <img id="coverPreview" class="cover-preview-img" src="img/default-cover.jpg" style="width:220px;height:80px;border-radius:8px;object-fit:cover;">
+      </div>
+    </div>
+
+    <div class="photo-section">
+      <div class="photo-block">
+        <div class="photo-title-row">
+          <h3>Фото профілю</h3>
+          <span class="photo-hint">Виберіть із бібліотеки або завантажте своє</span>
+        </div>
+        <div class="photo-gallery" id="avatarLibrary"></div>
+        <div class="photo-input-row">
+          <input id="avatarFile" type="file" accept="image/*">
+        </div>
+      </div>
+
+      <div class="photo-block">
+        <div class="photo-title-row">
+          <h3>Обкладинка</h3>
+          <span class="photo-hint">Виберіть готову обкладинку</span>
+        </div>
+        <div class="photo-gallery" id="coverLibrary"></div>
+        <div class="photo-input-row">
+          <input id="coverFile" type="file" accept="image/*">
+        </div>
+      </div>
+    </div>
+
+    <button type="button" class="btn save-btn">Зберегти</button>
+    <p id="profileMessage" class="small info-message" style="display:none; margin-top:16px;"></p>
+
+  </div>
+
+</div>
+
+<script>
+  let currentUser;
+  let selectedAvatarUrl = "";
+  let selectedCoverUrl = "";
+
+  const avatarOptions = [
+    "https://i.pravatar.cc/280?img=12",
+    "https://i.pravatar.cc/280?img=32",
+    "https://i.pravatar.cc/280?img=45",
+    "https://i.pravatar.cc/280?img=66"
+  ];
+
+  const coverOptions = [
+    "https://images.pexels.com/photos/414171/pexels-photo-414171.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940",
+    "https://images.pexels.com/photos/669996/pexels-photo-669996.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940",
+    "https://images.pexels.com/photos/769888/pexels-photo-769888.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940",
+    "https://images.pexels.com/photos/2379005/pexels-photo-2379005.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940"
+  ];
+
+  const avatarLibrary = document.getElementById("avatarLibrary");
+  const coverLibrary = document.getElementById("coverLibrary");
+  const avatarFile = document.getElementById("avatarFile");
+  const coverFile = document.getElementById("coverFile");
+  const profileMessage = document.getElementById("profileMessage");
+
+  function showMessage(text, success = true) {
+    profileMessage.style.display = "block";
+    profileMessage.style.color = success ? "#0a6" : "#c33";
+    profileMessage.textContent = text;
+  }
+
+  function clearMessage() {
+    profileMessage.style.display = "none";
+    profileMessage.textContent = "";
+  }
+
+  function renderGallery() {
+    avatarLibrary.innerHTML = "";
+    avatarOptions.forEach(url => {
+      const item = document.createElement("div");
+      item.className = "photo-item" + (selectedAvatarUrl === url ? " selected" : "");
+      item.innerHTML = `<img src="${url}" alt="avatar">`;
+      item.onclick = () => {
+        selectedAvatarUrl = url;
+        avatarFile.value = "";
+        renderGallery();
+      };
+      avatarLibrary.appendChild(item);
+    });
+
+    coverLibrary.innerHTML = "";
+    coverOptions.forEach(url => {
+      const item = document.createElement("div");
+      item.className = "photo-item cover-item" + (selectedCoverUrl === url ? " selected" : "");
+      item.innerHTML = `<img src="${url}" alt="cover">`;
+      item.onclick = () => {
+        selectedCoverUrl = url;
+        coverFile.value = "";
+        renderGallery();
+      };
+      coverLibrary.appendChild(item);
+    });
+
+    // update preview images
+    const avatarPrev = document.getElementById('avatarPreview');
+    const coverPrev = document.getElementById('coverPreview');
+    if (avatarPrev) avatarPrev.src = selectedAvatarUrl || 'img/user.png';
+    if (coverPrev) coverPrev.src = selectedCoverUrl || 'img/default-cover.jpg';
+  }
+
+  function loadUserData(user) {
+    currentUser = user;
+    document.body.style.visibility = "visible";
+    history.pushState(null, document.title, location.href);
+    window.addEventListener("popstate", () => {
+      history.pushState(null, document.title, location.href);
+    });
+
+    db.ref(`users/${user.uid}`).once('value').then(snapshot => {
+      const data = snapshot.val() || {};
+      document.getElementById("nickname").value = data.nickname || "";
+      document.getElementById("age").value = data.age || "";
+      document.getElementById("bio").value = data.bio || "";
+      document.getElementById("interests").value = data.interests || "";
+
+      if (data.avatar && typeof data.avatar === "string") {
+        selectedAvatarUrl = data.avatar;
+      }
+      if (data.cover && typeof data.cover === "string") {
+        selectedCoverUrl = data.cover;
+      }
+      renderGallery();
+    });
+  }
+
+  auth.onAuthStateChanged(user => {
+    if (!user) {
+      location.replace("login.html");
+      return;
+    }
+    loadUserData(user);
+  });
+
+  function readFileAsDataUrl(file) {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result);
+      reader.onerror = () => reject(reader.error);
+      reader.readAsDataURL(file);
+    });
+  }
+
+  function saveProfile() {
+    if (!currentUser) return showMessage("Не знайдено залогіненого користувача.", false);
+
+    clearMessage();
+
+    const profileData = {
+      nickname: document.getElementById("nickname").value,
+      age: document.getElementById("age").value,
+      bio: document.getElementById("bio").value,
+      interests: document.getElementById("interests").value
+    };
+
+    const avatarSelection = document.getElementById("avatarFile").files[0] || null;
+    const coverSelection = document.getElementById("coverFile").files[0] || null;
+
+    if (!avatarSelection && selectedAvatarUrl) profileData.avatar = selectedAvatarUrl;
+    if (!coverSelection && selectedCoverUrl) profileData.cover = selectedCoverUrl;
+
+    (async () => {
+      try {
+        await db.ref(`users/${currentUser.uid}`).update(profileData);
+
+        if (avatarSelection) {
+          if (avatarSelection.size > 5 * 1024 * 1024) throw new Error("Аватарка занадто велика (max 5MB).");
+          const path = `users/${currentUser.uid}/avatar_${Date.now()}`;
+          const snapshot = await storage.ref(path).put(avatarSelection);
+          const url = await snapshot.ref.getDownloadURL();
+          await db.ref(`users/${currentUser.uid}`).update({ avatar: url });
+        }
+
+        if (coverSelection) {
+          if (coverSelection.size > 8 * 1024 * 1024) throw new Error("Обкладинка занадто велика (max 8MB).");
+          const path = `users/${currentUser.uid}/cover_${Date.now()}`;
+          const snapshot = await storage.ref(path).put(coverSelection);
+          const url = await snapshot.ref.getDownloadURL();
+          await db.ref(`users/${currentUser.uid}`).update({ cover: url });
+        }
+
+        location.href = "profile.html";
+      } catch (err) {
+        showMessage(err.message || "Помилка збереження профілю.", false);
+      }
+    })();
+  }
+
+  document.addEventListener("DOMContentLoaded", () => {
+    const saveButton = document.querySelector(".save-btn");
+    if (saveButton) {
+      saveButton.addEventListener("click", saveProfile);
+    }
+    // preview selected files
+    avatarFile.addEventListener('change', async (e) => {
+      const f = e.target.files[0];
+      if (f) {
+        try {
+          const data = await readFileAsDataUrl(f);
+          selectedAvatarUrl = data;
+          renderGallery();
+        } catch (err) { console.warn(err); }
+      }
+    });
+
+    coverFile.addEventListener('change', async (e) => {
+      const f = e.target.files[0];
+      if (f) {
+        try {
+          const data = await readFileAsDataUrl(f);
+          selectedCoverUrl = data;
+          renderGallery();
+        } catch (err) { console.warn(err); }
+      }
+    });
+  });
+</script>
+
+</body>
+</html>

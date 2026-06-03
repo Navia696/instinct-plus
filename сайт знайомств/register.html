@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+  <meta charset="UTF-8">
+  <title>Instinct+ — Реєстрація</title>
+  <link rel="stylesheet" href="style.css">
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-database-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-storage-compat.js"></script>
+  <script src="firebase-init.js"></script>
+</head>
+
+<body class="auth-page register-page" style="visibility:hidden">
+
+<div class="inner-bg"></div>
+
+<div class="form-box">
+  <h2>Реєстрація</h2>
+  <label for="nickname">Нікнейм</label>
+  <input id="nickname" type="text" placeholder="Нікнейм">
+  <label for="email">Email</label>
+  <input id="email" type="email" placeholder="Email">
+  <label for="password">Пароль</label>
+  <input id="password" type="password" placeholder="Пароль">
+  <p class="input-hint">Пароль має бути мінімум 7 символів, містити 1 велику літеру, 1 цифру, англійськими символами.</p>
+  <label for="age">Вік</label>
+  <input id="age" type="text" inputmode="numeric" pattern="\d*" maxlength="2" placeholder="Вік">
+  <p class="input-hint">Вік повинен бути від 12 років (вводь цифрами).</p>
+  <button id="registerBtn" class="btn full" onclick="register()">Створити акаунт</button>
+  <p id="signedInMessage" class="small info-message"></p>
+  <p class="small">Вже є акаунт? <a href="login.html">Увійти</a></p>
+</div>
+
+<script>
+  window.addEventListener("unload", function() {});
+
+  function checkAuthAndRedirect() {
+    if (auth.currentUser) {
+      location.replace("home.html");
+      return;
+    }
+    document.body.style.visibility = "visible";
+  }
+
+  auth.onAuthStateChanged(user => {
+    if (user) {
+      location.replace("home.html");
+      return;
+    }
+    document.body.style.visibility = "visible";
+  });
+
+  window.addEventListener("pageshow", event => {
+    if (event.persisted || auth.currentUser) {
+      checkAuthAndRedirect();
+    }
+  });
+
+  window.addEventListener("popstate", checkAuthAndRedirect);
+  window.addEventListener("load", checkAuthAndRedirect);
+
+  function register() {
+    const nicknameInput = document.getElementById("nickname");
+    const emailInput = document.getElementById("email");
+    const passwordInput = document.getElementById("password");
+    const ageInput = document.getElementById("age");
+
+    const nicknameValue = nicknameInput.value.trim();
+    const emailValue = emailInput.value.trim();
+    const pass = passwordInput.value;
+    const ageValue = ageInput.value.trim();
+
+    const passwordRegex = /^(?=.*[A-Z])(?=.*\d)[\x21-\x7E]{7,}$/;
+
+    if (!nicknameValue) {
+      return alert("Вкажіть нікнейм.");
+    }
+
+    if (!emailValue) {
+      return alert("Введіть Email.");
+    }
+
+    if (!passwordRegex.test(pass)) {
+      return alert("Пароль повинен бути мінімум 7 символів, містити принаймні одну велику літеру, одну цифру, англійські літери та цифри. Спеціальні символи теж дозволені.");
+    }
+
+    if (!ageValue) {
+      return alert("Вкажіть вік.");
+    }
+
+    if (!/^\d+$/.test(ageValue)) {
+      return alert("Вік повинен містити тільки цифри.");
+    }
+
+    const ageNumber = Number(ageValue);
+    if (ageNumber < 12) {
+      return alert("Вам має бути 12 років або більше для використання сайту.");
+    }
+
+    auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL)
+      .then(() => {
+        return auth.createUserWithEmailAndPassword(emailValue, pass);
+      })
+      .then(user => {
+        const uid = user.user.uid;
+
+        localStorage.setItem("lastEmail", emailValue);
+
+        return db.ref(`users/${uid}`).set({
+          nickname: nicknameValue,
+          age: ageValue,
+          bio: "",
+          interests: "",
+          avatar: "",
+          cover: ""
+        });
+      })
+      .then(() => {
+        location.replace("home.html");
+      })
+      .catch(err => {
+        if (err.code === "auth/configuration-not-found") {
+          alert("Firebase: включите Email/Password в Firebase Console -> Authentication -> Sign-in method.");
+        } else {
+          alert(err.message);
+        }
+      });
+  }
+</script>
+
+</body>
+</html>

@@ -1,0 +1,661 @@
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+  font-family: system-ui, sans-serif;
+}
+
+/* Фон */
+.bg {
+  position: fixed;
+  inset: 0;
+  background-image: url("https://i.pinimg.com/1200x/38/6a/6c/386a6c208e06f5764de42acfe9876632.jpg");
+  background-size: cover;
+  background-position: center;
+  z-index: -1;
+}
+
+/* Верхний текст */
+.top {
+  padding: 30px;
+  color: #fff;
+  text-shadow: 0 0 10px rgba(0,0,0,0.6);
+}
+
+.top h1 {
+  font-size: 36px;
+}
+
+.top p {
+  margin-top: 6px;
+  font-size: 16px;
+  opacity: 0.9;
+}
+
+/* Центрированный блок */
+.center-box {
+  position: absolute;
+  top: 60%; /* ← регулируешь высоту */
+  left: 50%;
+  transform: translate(-50%, -50%);
+
+  background: rgba(255, 122, 60, 0.55); /* оранжевый полупрозрачный */
+  padding: 20px 30px;
+  border-radius: 14px;
+  backdrop-filter: blur(6px);
+
+  display: flex;
+  gap: 20px;
+}
+
+/* Кнопки */
+.btn {
+  padding: 10px 20px;
+  border: none;
+  border-radius: 8px;
+  background: #fff;
+  color: #333;
+  font-weight: 600;
+  cursor: pointer;
+  transition: 0.2s;
+}
+
+.btn:hover {
+  background: #f0f0f0;
+}
+.age-tag {
+  position: fixed;
+  bottom: 10px;
+  right: 10px;
+  background: rgba(0,0,0,0.55);
+  color: #fff;
+  padding: 6px 10px;
+  border-radius: 8px;
+  font-size: 14px;
+  backdrop-filter: blur(4px);
+}
+
+.form-box {
+  position: absolute;
+  top: 55%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+
+  width: 320px;
+  padding: 25px 30px;
+
+  background: rgba(255, 122, 60, 0.55); /* оранжевый полупрозрачный */
+  backdrop-filter: blur(8px);
+  border-radius: 16px;
+
+  color: #fff;
+  text-shadow: 0 0 6px rgba(0,0,0,0.4);
+}
+
+.form-box h2 {
+  text-align: center;
+  margin-bottom: 16px;
+}
+
+.form-box label {
+  font-size: 14px;
+  opacity: 0.9;
+}
+
+.input-hint {
+  font-size: 12px;
+  color: rgba(255,255,255,0.85);
+  margin: -8px 0 12px;
+  line-height: 1.4;
+}
+
+.form-box input {
+  width: 100%;
+  padding: 10px;
+  margin: 6px 0 14px;
+  border-radius: 8px;
+  border: none;
+  outline: none;
+}
+
+.btn.full {
+  width: 100%;
+  padding: 10px;
+  border-radius: 8px;
+  border: none;
+  background: #fff;
+  color: #333;
+  font-weight: 600;
+  cursor: pointer;
+  transition: 0.2s;
+}
+
+.btn.full:hover {
+  background: #f0f0f0;
+}
+
+.info-message {
+  margin-top: 12px;
+  color: #fffcce;
+  opacity: 0.95;
+  font-size: 13px;
+  text-align: center;
+}
+
+.btn.logout {
+  margin-left: 10px;
+  background: rgba(255,255,255,0.15);
+  color: #fff;
+}
+
+.btn.logout:hover {
+  background: rgba(255,255,255,0.25);
+}
+
+.small {
+  margin-top: 10px;
+  text-align: center;
+  font-size: 14px;
+}
+
+.small a {
+  color: #fff;
+  font-weight: bold;
+  text-decoration: underline;
+}
+
+.home-box {
+  position: absolute;
+  top: 55%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+
+  width: 350px;
+  padding: 25px 30px;
+
+  background: rgba(0, 0, 0, 0.55);
+  backdrop-filter: blur(8px);
+  border-radius: 16px;
+
+  color: #fff;
+  text-shadow: 0 0 6px rgba(0,0,0,0.4);
+  text-align: center;
+}
+.hint {
+  font-size: 12px;
+  color: #fff;
+  opacity: 0.85;
+  margin-top: -10px;
+  margin-bottom: 12px;
+  text-shadow: 0 0 4px rgba(0,0,0,0.5);
+}
+
+
+/* ФОН ВНУТРИ */
+.inner-bg {
+  position: fixed;
+  inset: 0;
+  background-image: url("https://i.pinimg.com/736x/9d/dc/fd/9ddcfde61ba1d93bc9682e0db771824a.jpg");
+  background-size: cover;
+  background-position: center;
+  filter: brightness(0.80); /* светлее */
+  z-index: -1;
+}
+
+body.auth-page .inner-bg {
+  background-image: url("https://i.pinimg.com/1200x/38/6a/6c/386a6c208e06f5764de42acfe9876632.jpg");
+  background-size: cover;
+  background-position: center;
+}
+
+body.home-page .inner-bg {
+  background-image: url("https://i.pinimg.com/736x/9d/dc/fd/9ddcfde61ba1d93bc9682e0db771824a.jpg");
+  background-size: cover;
+  background-position: center;
+}
+
+/* ВЕРХНЯЯ ПАНЕЛЬ */
+.topbar {
+  height: 60px;
+  padding: 0 20px;
+  background: rgba(0,0,0,0.55);
+  backdrop-filter: blur(6px);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  color: #fff;
+}
+
+.edit-container {
+  min-height: calc(100vh - 60px);
+  padding: 30px 20px 40px;
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+}
+
+.edit-card {
+  width: min(920px, 100%);
+  background: rgba(255,255,255,0.96);
+  border-radius: 28px;
+  box-shadow: 0 25px 70px rgba(0,0,0,0.18);
+  backdrop-filter: blur(16px);
+  padding: 32px 36px;
+  color: #1d1d1d;
+}
+
+.edit-card h2 {
+  margin-bottom: 24px;
+  font-size: 32px;
+}
+
+.field-group {
+  display: grid;
+  gap: 10px;
+  margin-bottom: 18px;
+}
+
+.field-group label {
+  font-weight: 700;
+  color: #333;
+}
+
+.field-group input,
+.field-group textarea,
+.photo-input-row input {
+  width: 100%;
+  padding: 14px 16px;
+  border: 1px solid rgba(34,34,34,0.12);
+  border-radius: 14px;
+  outline: none;
+  font-size: 15px;
+  background: #fff;
+  color: #222;
+}
+
+.field-group textarea {
+  resize: vertical;
+  min-height: 88px;
+}
+
+.photo-section {
+  display: grid;
+  gap: 24px;
+  margin-bottom: 24px;
+}
+
+.photo-block {
+  border: 1px solid rgba(34,34,34,0.08);
+  border-radius: 22px;
+  padding: 18px;
+  background: rgba(255,255,255,0.98);
+}
+
+.photo-title-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.photo-title-row h3 {
+  font-size: 18px;
+  margin: 0;
+}
+
+.photo-hint {
+  font-size: 13px;
+  color: #777;
+}
+
+.photo-gallery {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(105px, 1fr));
+  gap: 12px;
+}
+
+.photo-item {
+  border-radius: 18px;
+  overflow: hidden;
+  border: 2px solid transparent;
+  cursor: pointer;
+  transition: transform 0.18s ease, border-color 0.18s ease;
+}
+
+.photo-item.selected {
+  border-color: #ff7a3c;
+  transform: translateY(-2px);
+}
+
+.photo-item:hover {
+  transform: translateY(-2px);
+}
+
+.photo-item img {
+  width: 100%;
+  height: 100%;
+  min-height: 96px;
+  object-fit: cover;
+  display: block;
+}
+
+.cover-item img {
+  min-height: 120px;
+}
+
+.photo-input-row {
+  margin-top: 14px;
+}
+
+.btn.save-btn,
+.btn.logout {
+  min-width: 140px;
+}
+
+.btn.save-btn {
+  margin-top: 10px;
+  width: 100%;
+  padding: 14px 24px;
+  background: #ff7a3c;
+  color: #fff;
+  border-radius: 14px;
+  border: none;
+  font-size: 16px;
+  font-weight: 700;
+}
+
+.btn.save-btn:hover {
+  opacity: 0.94;
+}
+
+.btn.logout {
+  margin-left: 10px;
+  background: rgba(255,255,255,0.16);
+  color: #fff;
+}
+
+.btn.logout:hover {
+  background: rgba(255,255,255,0.28);
+}
+
+/* ИКОНКА АККАУНТА */
+.account-icon img {
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  border: 2px solid #fff;
+  cursor: pointer;
+}
+
+/* ОСНОВНАЯ СЕТКА — КАК FACEBOOK */
+.layout {
+  display: grid;
+  grid-template-columns: 180px 1fr;
+  gap: 20px;
+  padding: 20px;
+}
+
+/* ЛЕВОЕ МЕНЮ — КОМПАКТНОЕ */
+.sidebar-left {
+  background: rgba(255,255,255,0.80); /* мягкий белый */
+  backdrop-filter: blur(4px);
+  padding: 15px;
+  height: calc(100vh - 70px);
+  border-radius: 12px;
+}
+
+.menu-item {
+  padding: 8px 10px;
+  margin-bottom: 8px;
+  background: rgba(255,122,60,0.55);
+  border-radius: 10px;
+  font-size: 14px;
+  cursor: pointer;
+}
+
+/* ЦЕНТРАЛЬНАЯ ЛЕНТА — КАК FACEBOOK */
+.content-box {
+  max-width: 1100px; /* шире центральной панели */
+  width: 100%;
+  margin: 0 auto;
+  background: rgba(255,255,255,0.14); /* легкий фон, не вся панель белая */
+  padding: 24px;
+  border-radius: 18px;
+  color: #333;
+  box-shadow: 0 6px 18px rgba(0,0,0,0.18);
+}
+
+
+.post {
+  background: #fff;
+  border-radius: 14px;
+  padding: 18px;
+  margin-bottom: 16px;
+  box-shadow: 0 6px 18px rgba(0,0,0,0.08);
+  color: #222;
+}
+
+.post b {
+  display: block;
+  margin-bottom: 10px;
+  color: #111;
+}
+
+.no-posts {
+  margin: 12px 0 16px;
+  color: #555;
+  font-size: 14px;
+}
+
+.add-post {
+  position: fixed;
+  bottom: 20px;
+  left: 20px;
+  width: 45px;
+  height: 45px;
+  background: rgba(255,122,60,0.85);
+  color: #fff;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 28px;
+  cursor: pointer;
+  box-shadow: 0 4px 10px rgba(0,0,0,0.3);
+}
+
+
+.create-post {
+  max-width: 980px;
+  margin: 0 auto 20px;
+  background: rgba(255,255,255,0.90);
+  padding: 18px;
+  border-radius: 16px;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.10);
+  display: flex;
+  gap: 12px;
+  align-items: center;
+}
+
+.post-input {
+  flex: 1;
+  padding: 14px 16px;
+  border-radius: 12px;
+  border: 1px solid rgba(0,0,0,0.12);
+  background: #fff;
+  color: #333;
+}
+
+.post-btn {
+  padding: 12px 18px;
+  background: rgba(255,122,60,0.95);
+  border: none;
+  border-radius: 12px;
+  color: #fff;
+  cursor: pointer;
+}
+
+.post-btn:hover {
+  background: rgba(255,122,60,1);
+}
+
+.topbar .topbar-btn {
+  margin-left: 10px;
+}
+
+/* Левое меню — фиксированная структура */
+.sidebar-left {
+  display: flex !important;
+  flex-direction: column !important;
+  justify-content: space-between !important;
+  height: calc(100vh - 70px) !important;
+  width: 180px !important;
+  padding: 12px !important;
+  background: rgba(255,255,255,0.80) !important;
+  border-radius: 12px !important;
+}
+
+/* Верхняя часть меню */
+.menu-top {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+/* Нижняя часть — знакомства */
+.friends-box {
+  margin-top: 20px;
+  padding-top: 10px;
+  border-top: 1px solid rgba(0,0,0,0.15);
+}
+
+/* Элементы знакомств */
+.friend {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+  font-size: 13px;
+  color: #333;
+}
+
+.status {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+}
+
+.online {
+  background: #4CAF50;
+}
+
+.offline {
+  background: #999;
+}
+
+/* ОБЛОЖКА */
+.cover-photo {
+  width: 100%;
+  height: 260px;
+  overflow: hidden;
+  border-radius: 0 0 12px 12px;
+  background: #000; /* Чёрный фон, если нет фото */
+  position: relative;
+  z-index: 1;
+}
+
+.cover-photo img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+/* АВАТАР + ИМЯ */
+.profile-header {
+  display: flex;
+  align-items: flex-end;
+  gap: 20px;
+  padding: 0 20px;
+  margin-top: -60px;
+  position: relative;
+  z-index: 5; /* Аватар всегда поверх обложки */
+}
+
+.avatar {
+  width: 140px;
+  height: 140px;
+  border-radius: 50%;
+  border: 4px solid #fff;
+  object-fit: cover;
+  background: #6ec6ff; /* Голубой аватар по умолчанию */
+}
+
+/* НИК — БЕЛЫЙ */
+.profile-info h2 {
+  font-size: 28px;
+  margin: 0;
+  color: #fff; /* Белый текст */
+  text-shadow: 0 0 6px rgba(0,0,0,0.6); /* Чтобы читался на фоне */
+}
+
+.friends-count {
+  margin: 8px 0 0;
+  color: rgba(255,255,255,0.85);
+  font-size: 14px;
+}
+
+.profile-content h3 {
+  margin-top: 0;
+  margin-bottom: 14px;
+  font-size: 20px;
+}
+
+.profile-buttons button {
+  padding: 8px 14px;
+  background: rgba(255,122,60,0.85);
+  border: none;
+  border-radius: 8px;
+  color: #fff;
+  cursor: pointer;
+  margin-top: 10px;
+}
+
+/* БЛОК ИНФОРМАЦИИ — МЯГКИЙ, НЕ НА ВСЮ ШИРИНУ */
+.profile-content {
+  background: rgba(255,255,255,0.85);
+  padding: 20px;
+  margin: 20px auto;
+  border-radius: 16px;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+  max-width: 600px;
+}
+
+/* ПОСТЫ */
+.profile-posts {
+  max-width: 600px;
+  margin: 20px auto;
+}
+
+.profile-posts .post {
+  background: rgba(255,255,255,0.85);
+  padding: 15px;
+  border-radius: 14px;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+  margin-bottom: 15px;
+}
+
+/* ГРАДИЕНТ ТОЛЬКО ДЛЯ ПРОФИЛЯ И РЕДАКТИРОВАНИЯ */
+body.profile-page .inner-bg,
+body.edit-page .inner-bg {
+  background-image: none !important;
+  background: linear-gradient(135deg, #31a8df, #f308ac) !important;
+}
+
+/* ФОН ДЛЯ AUTH (Вхід/Реєстрація) */
+body.auth-page .inner-bg {
+  background-image: url("https://i.pinimg.com/1200x/38/6a/6c/386a6c208e06f5764de42acfe9876632.jpg") !important;
+  background-size: cover;
+  background-position: center;
+}
+
