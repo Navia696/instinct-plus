@@ -4,83 +4,190 @@
   <meta charset="UTF-8">
   <title>Instinct+ — Чат</title>
   <link rel="stylesheet" href="style.css">
+
   <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-database-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-storage-compat.js"></script>
   <script src="firebase-init.js"></script>
+
+  <style>
+    body.chat-page { visibility: hidden; }
+  </style>
+
+  <script>
+    function applyChatSettings() {
+      const theme = localStorage.getItem("chatTheme") || "pink";
+      const bgFile = localStorage.getItem("chatBgFile") || "";
+
+      document.body.classList.remove("theme-pink", "theme-blue", "theme-green");
+      document.body.classList.add("theme-" + theme);
+
+      const msgBox = document.querySelector(".messages-container");
+
+      if (bgFile) {
+        msgBox.style.backgroundImage = `url('${bgFile}')`;
+      } else {
+        msgBox.style.backgroundImage = "none";
+      }
+    }
+  </script>
+
 </head>
 
-<body>
+<body class="chat-page theme-pink">
 
-  <header class="topbar">
-  <h1>Instinct+</h1>
-  <div>
+<header class="topbar">
+  <h1 class="site-title">Instinct+</h1>
+
+  <div class="topbar-actions-left">
+    <button class="btn topbar-btn" onclick="location.href='home.html'">Головна</button>
+  </div>
+
+  <div class="topbar-actions-right">
     <button class="btn topbar-btn" onclick="location.href='profile.html'">Профіль</button>
     <button class="btn logout" onclick="logout()">Вийти</button>
   </div>
-  </header>
+</header>
 
-<h2>Чат</h2>
+<div class="chat-container">
 
-<div id="messages"></div>
+  <div class="matches-list">
+    <h3>Мої матчі</h3>
+    <div id="matchesList" class="matches-items"></div>
+  </div>
 
-<input id="msg" placeholder="Ваше повідомлення">
-<button onclick="sendMessage()">Надіслати</button>
+  <div class="chat-area">
+
+    <div class="chat-topbar">
+      <div class="chat-info">
+        <img id="chatAvatar" class="chat-avatar">
+        <div class="chat-header-text">
+          <h4 id="chatNickname"></h4>
+        </div>
+      </div>
+    </div>
+
+    <div class="messages-container empty">
+      <p>Виберіть чат, щоб розпочати</p>
+    </div>
+
+    <div class="chat-footer">
+      <input id="msg" placeholder="Напишіть повідомлення..." onkeypress="if(event.key==='Enter') sendMessage()">
+      <button onclick="sendMessage()" class="send-btn">→</button>
+    </div>
+
+  </div>
+</div>
 
 <script>
   let currentUser;
-  let chatId;
+  let currentMatch;
+  let matches = [];
 
-  function initChat(user) {
-    currentUser = user;
-    const params = new URLSearchParams(location.search);
-    chatId = params.get("match");
-
-    if (!chatId) {
-      messages.innerHTML = "<p>Виберіть співрозмовника з Пошуку.</p>";
+  auth.onAuthStateChanged(user => {
+    if (!user) {
+      location.href = "login.html";
       return;
     }
 
-    loadMessages();
-    // mark as seen now
-    db.ref(`matches/${chatId}/lastSeen/${currentUser.uid}`).set(firebase.database.ServerValue.TIMESTAMP);
-  }
+    db.ref("settings/" + user.uid).once("value").then(snap => {
+      const s = snap.val() || {};
 
-  if (auth.currentUser) {
-    initChat(auth.currentUser);
-  } else {
-    auth.onAuthStateChanged(user => {
-      if (!user) location.href = "login.html";
+      localStorage.setItem("chatTheme", s.theme || "pink");
+
+      if (s.bgFile) {
+        localStorage.setItem("chatBgFile", s.bgFile);
+      }
+
+      applyChatSettings();
+      document.body.style.visibility = "visible";
+
       initChat(user);
     });
+  });
+
+  function initChat(user) {
+    currentUser = user;
+    loadMatches();
+  }
+
+  async function loadMatches() {
+    const snap = await db.ref('matches').once('value');
+    const allMatches = snap.val() || {};
+    
+    matches = Object.keys(allMatches)
+      .filter(matchId => matchId.includes(currentUser.uid))
+      .map(matchId => {
+        const match = allMatches[matchId];
+        const otherUid = match.users.find(uid => uid !== currentUser.uid);
+        return { matchId, otherUid, ...match };
+      });
+
+    renderMatchesList();
+  }
+
+  async function renderMatchesList() {
+    const matchesList = document.getElementById('matchesList');
+    matchesList.innerHTML = '';
+
+    for (const match of matches) {
+      const userSnap = await db.ref(`users/${match.otherUid}`).once('value');
+      const userData = userSnap.val();
+
+      const div = document.createElement('div');
+      div.className = 'match-item-chat';
+      div.innerHTML = `
+        <img class="match-avatar" src="${userData.avatar || 'img/user.png'}" alt="avatar">
+        <div class="match-info">
+          <p class="match-name">${userData.nickname}</p>
+          <p class="match-preview">Натисніть для чату</p>
+        </div>
+      `;
+
+      div.onclick = () => selectMatch(match.matchId, userData);
+
+      matchesList.appendChild(div);
+    }
+  }
+
+  function selectMatch(matchId, userData) {
+    currentMatch = matchId;
+    chatNickname.innerText = userData.nickname;
+    chatAvatar.src = userData.avatar || 'img/user.png';
+
+    document.querySelectorAll('.match-item-chat').forEach(item => {
+      item.classList.remove('active');
+    });
+    event.currentTarget.classList.add('active');
+
+    loadMessages();
   }
 
   function loadMessages() {
-    db.ref(`messages/${chatId}/items`).orderByChild('createdAt').on('value', snap => {
-      messages.innerHTML = "";
+    const messagesContainer = document.querySelector('.messages-container');
+    db.ref(`messages/${currentMatch}/items`).orderByChild('createdAt').on('value', snap => {
+      messagesContainer.innerHTML = "";
       snap.forEach(child => {
         const m = child.val();
         const div = document.createElement("div");
-        div.className = (m.from === currentUser.uid) ? "msg me" : "msg";
+        div.className = (m.from === currentUser.uid) ? "message-bubble sent" : "message-bubble received";
         div.innerText = m.text;
-        messages.appendChild(div);
+        messagesContainer.appendChild(div);
       });
+      messagesContainer.scrollTop = messagesContainer.scrollHeight;
     });
   }
 
   function sendMessage() {
     const text = msg.value.trim();
-    if (!text || !chatId) return;
+    if (!text || !currentMatch) return;
 
-    db.ref(`messages/${chatId}/items`).push({
+    db.ref(`messages/${currentMatch}/items`).push({
       from: currentUser.uid,
       text,
       createdAt: firebase.database.ServerValue.TIMESTAMP
     });
 
-    // update lastSeen for sender
-    db.ref(`matches/${chatId}/lastSeen/${currentUser.uid}`).set(firebase.database.ServerValue.TIMESTAMP);
     msg.value = "";
   }
 </script>
