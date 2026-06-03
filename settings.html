@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+  <meta charset="UTF-8">
+  <title>Instinct+ — Налаштування чату</title>
+  <link rel="stylesheet" href="style.css">
+
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-database-compat.js"></script>
+  <script src="firebase-init.js"></script>
+</head>
+
+<body class="settings-page">
+
+<header class="topbar">
+  <h1>Instinct+</h1>
+  <div>
+    <button class="btn topbar-btn" onclick="location.href='home.html'">Головна</button>
+    <button class="btn topbar-btn" onclick="location.href='profile.html'">Профіль</button>
+    <button class="btn logout" onclick="logout()">Вийти</button>
+  </div>
+</header>
+
+<div class="settings-wrapper">
+
+  <div class="settings-card">
+    <h2>Налаштування чату</h2>
+
+    <div class="field-group">
+      <label>Кольорова тема</label>
+      <select id="chatTheme" class="input">
+        <option value="pink">Ніжно‑рожевий</option>
+        <option value="blue">Ніжно‑голубий</option>
+        <option value="green">Ніжно‑зелений</option>
+      </select>
+    </div>
+
+    <div class="field-group">
+      <label>Фон чату</label>
+      <input type="file" id="chatBgFile" accept="image/*" class="input">
+    </div>
+
+    <button class="btn save-btn" onclick="saveChatSettings()">Зберегти</button>
+  </div>
+
+</div>
+
+<script>
+function saveChatSettings() {
+  const theme = chatTheme.value;
+  const file = chatBgFile.files[0];
+
+  localStorage.setItem("chatTheme", theme);
+
+  if (file) {
+    const reader = new FileReader();
+    reader.onload = () => {
+      localStorage.setItem("chatBgFile", reader.result);
+
+      db.ref("settings/" + auth.currentUser.uid).set({
+        theme: theme,
+        bgFile: reader.result
+      });
+
+      window.location.href = "chat.html";
+    };
+    reader.readAsDataURL(file);
+  } else {
+    db.ref("settings/" + auth.currentUser.uid).set({
+      theme: theme,
+      bgFile: null
+    });
+
+    window.location.href = "chat.html";
+  }
+}
+
+auth.onAuthStateChanged(user => {
+  if (!user) return;
+
+  db.ref("settings/" + user.uid).once("value").then(snap => {
+    const s = snap.val() || {};
+
+    chatTheme.value = s.theme || "pink";
+
+    if (s.bgFile) {
+      localStorage.setItem("chatBgFile", s.bgFile);
+    }
+  });
+});
+</script>
+
+</body>
+</html>
