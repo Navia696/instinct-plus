@@ -77,4 +77,19 @@ posts.forEach(text => {
   div.innerHTML = `<p>${text}</p>`;
   postsContainer.appendChild(div);
 });
+function saveChatSettings() {
+  const theme = document.getElementById("chatTheme").value;
+  const bg = document.getElementById("chatBg").value;
+  const custom = document.getElementById("chatBgCustom").value;
+  const font = document.getElementById("chatFont").value;
+
+  localStorage.setItem("chatTheme", theme);
+  localStorage.setItem("chatBg", bg);
+  localStorage.setItem("chatBgCustom", custom);
+  localStorage.setItem("chatFont", font);
+
+  document.getElementById("customBgBlock").style.display =
+    bg === "custom" ? "block" : "none";
+}
+
 
