@@ -11,27 +11,34 @@
   <script src="firebase-init.js"></script>
 </head>
 
-<body>
+<body class="search-page">
 
-<h2>Пошук людей</h2>
+<div class="inner-bg"></div>
 
 <header class="topbar">
-  <h1>Instinct+</h1>
-  <div>
+  <h1 class="site-title">Instinct+</h1>
+  <div class="topbar-actions-left">
+    <button class="btn topbar-btn" onclick="location.href='home.html'">Головна</button>
+  </div>
+
+  <div class="topbar-actions-right">
     <button class="btn topbar-btn" onclick="location.href='profile.html'">Профіль</button>
     <button class="btn logout" onclick="logout()">Вийти</button>
   </div>
 </header>
 
-<!-- ФИЛЬТРЫ -->
-<div class="filters">
-  <input id="minAge" type="number" placeholder="Мін. вік">
-  <input id="maxAge" type="number" placeholder="Макс. вік">
-  <input id="city" type="text" placeholder="Місто">
-  <button onclick="applyFilters()">Фільтрувати</button>
-</div>
+<div class="search-content">
+  <h2>Пошук людей</h2>
 
-<!-- КАРТОЧКА -->
+  <div class="filters">
+    <input id="minAge" type="number" min="12" max="70" value="12" placeholder="Мін. вік (12+)">
+    <input id="maxAge" type="number" min="12" max="70" value="70" placeholder="Макс. вік (до 70)">
+    <input id="city" type="text" placeholder="Місто" list="city-suggestions">
+    <button onclick="applyFilters()">Фільтрувати</button>
+  </div>
+  <datalist id="city-suggestions"></datalist>
+
+  <!-- КАРТОЧКА -->
 <div id="card" class="tinder-card">
   <img id="avatar" class="avatar">
   <h3 id="nickname"></h3>
@@ -45,41 +52,102 @@
     <button onclick="swipeRight()">❤️</button>
   </div>
 </div>
+</div>
 
 <script>
   let currentUser;
   let users = [];
+  let allUsers = [];
   let index = 0;
+  const minAge = document.getElementById('minAge');
+  const maxAge = document.getElementById('maxAge');
+  const city = document.getElementById('city');
+  const citySuggestions = document.getElementById('city-suggestions');
 
   auth.onAuthStateChanged(async user => {
     if (!user) location.href = "login.html";
     currentUser = user;
 
     await loadUsers();
+    setupBackgroundButtons();
     showUser();
   });
+
+  function applyFilters() {
+    const min = Math.max(12, Number(minAge.value) || 12);
+    const max = Math.min(70, Number(maxAge.value) || 70);
+    const cityFilter = city.value.trim().toLowerCase();
+
+    if (minAge.value && minAge.value < 12) {
+      minAge.value = 12;
+    }
+    if (maxAge.value && maxAge.value > 70) {
+      maxAge.value = 70;
+    }
+
+    const filtered = allUsers.filter(u => {
+      const age = Number(u.age) || 0;
+      const userCity = (u.city || "").toLowerCase();
+      return age >= min && age <= max &&
+        (cityFilter === "" || userCity === cityFilter);
+    });
+
+    users = filtered;
+    index = 0;
+    showUser();
+  }
+
+  function populateCitySuggestions(allUsers) {
+    const cityCounts = allUsers.reduce((acc, user) => {
+      const city = (user.city || "").trim();
+      if (!city) return acc;
+      const key = city.toLowerCase();
+      acc[key] = acc[key] || { label: city, count: 0 };
+      acc[key].count += 1;
+      return acc;
+    }, {});
+
+    citySuggestions.innerHTML = "";
+    Object.values(cityCounts)
+      .sort((a, b) => b.count - a.count)
+      .forEach(item => {
+        const option = document.createElement('option');
+        option.value = item.label;
+        citySuggestions.appendChild(option);
+      });
+  }
+
+  function setSearchBackground(mode) {
+    const innerBg = document.querySelector('.inner-bg');
+    const presets = {
+      default: "linear-gradient(135deg, rgba(255, 164, 189, 0.85), rgba(255, 224, 178, 0.85))",
+      cozy: "linear-gradient(135deg, rgba(244, 195, 142, 0.88), rgba(217, 147, 125, 0.9))",
+      neon: "linear-gradient(135deg, rgba(83, 63, 215, 0.9), rgba(255, 95, 109, 0.9))"
+    };
+    innerBg.style.background = presets[mode] || presets.default;
+    localStorage.setItem('searchBg', mode);
+    document.querySelectorAll('.bg-button').forEach(btn => {
+      btn.classList.toggle('active', btn.dataset.bg === mode);
+    });
+  }
+
+  function setupBackgroundButtons() {
+    document.querySelectorAll('.bg-button').forEach(button => {
+      button.addEventListener('click', () => setSearchBackground(button.dataset.bg));
+    });
+    const stored = localStorage.getItem('searchBg') || 'default';
+    setSearchBackground(stored);
+  }
 
   async function loadUsers() {
     const snap = await db.ref('users').once('value');
     const all = snap.val() || {};
-    users = Object.keys(all)
+    allUsers = Object.keys(all)
       .filter(id => id !== currentUser.uid)
       .map(id => ({ id, ...all[id] }));
-  }
 
-  function applyFilters() {
-    const min = Number(minAge.value) || 0;
-    const max = Number(maxAge.value) || 200;
-    const cityFilter = city.value.trim().toLowerCase();
-
-    users = users.filter(u =>
-      u.age >= min &&
-      u.age <= max &&
-      (cityFilter === "" || (u.city || "").toLowerCase() === cityFilter)
-    );
-
-    index = 0;
-    showUser();
+    populateCitySuggestions(allUsers);
+    users = allUsers;
   }
 
   function showUser() {
@@ -133,6 +201,7 @@
       location.href = "chat.html?match=" + matchId;
     }
   }
+
 </script>
 
 </body>
