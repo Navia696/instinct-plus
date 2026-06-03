@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+  <meta charset="UTF-8">
+  <title>Instinct+ — Чат</title>
+  <link rel="stylesheet" href="style.css">
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-database-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-storage-compat.js"></script>
+  <script src="firebase-init.js"></script>
+</head>
+
+<body>
+
+  <header class="topbar">
+  <h1>Instinct+</h1>
+  <div>
+    <button class="btn topbar-btn" onclick="location.href='profile.html'">Профіль</button>
+    <button class="btn logout" onclick="logout()">Вийти</button>
+  </div>
+  </header>
+
+<h2>Чат</h2>
+
+<div id="messages"></div>
+
+<input id="msg" placeholder="Ваше повідомлення">
+<button onclick="sendMessage()">Надіслати</button>
+
+<script>
+  let currentUser;
+  let chatId;
+
+  function initChat(user) {
+    currentUser = user;
+    const params = new URLSearchParams(location.search);
+    chatId = params.get("match");
+
+    if (!chatId) {
+      messages.innerHTML = "<p>Виберіть співрозмовника з Пошуку.</p>";
+      return;
+    }
+
+    loadMessages();
+    // mark as seen now
+    db.ref(`matches/${chatId}/lastSeen/${currentUser.uid}`).set(firebase.database.ServerValue.TIMESTAMP);
+  }
+
+  if (auth.currentUser) {
+    initChat(auth.currentUser);
+  } else {
+    auth.onAuthStateChanged(user => {
+      if (!user) location.href = "login.html";
+      initChat(user);
+    });
+  }
+
+  function loadMessages() {
+    db.ref(`messages/${chatId}/items`).orderByChild('createdAt').on('value', snap => {
+      messages.innerHTML = "";
+      snap.forEach(child => {
+        const m = child.val();
+        const div = document.createElement("div");
+        div.className = (m.from === currentUser.uid) ? "msg me" : "msg";
+        div.innerText = m.text;
+        messages.appendChild(div);
+      });
+    });
+  }
+
+  function sendMessage() {
+    const text = msg.value.trim();
+    if (!text || !chatId) return;
+
+    db.ref(`messages/${chatId}/items`).push({
+      from: currentUser.uid,
+      text,
+      createdAt: firebase.database.ServerValue.TIMESTAMP
+    });
+
+    // update lastSeen for sender
+    db.ref(`matches/${chatId}/lastSeen/${currentUser.uid}`).set(firebase.database.ServerValue.TIMESTAMP);
+    msg.value = "";
+  }
+</script>
+
+</body>
+</html>

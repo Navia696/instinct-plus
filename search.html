@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+  <meta charset="UTF-8">
+  <title>Instinct+ — Пошук</title>
+  <link rel="stylesheet" href="style.css">
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-database-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-storage-compat.js"></script>
+  <script src="firebase-init.js"></script>
+</head>
+
+<body>
+
+<h2>Пошук людей</h2>
+
+<header class="topbar">
+  <h1>Instinct+</h1>
+  <div>
+    <button class="btn topbar-btn" onclick="location.href='profile.html'">Профіль</button>
+    <button class="btn logout" onclick="logout()">Вийти</button>
+  </div>
+</header>
+
+<!-- ФИЛЬТРЫ -->
+<div class="filters">
+  <input id="minAge" type="number" placeholder="Мін. вік">
+  <input id="maxAge" type="number" placeholder="Макс. вік">
+  <input id="city" type="text" placeholder="Місто">
+  <button onclick="applyFilters()">Фільтрувати</button>
+</div>
+
+<!-- КАРТОЧКА -->
+<div id="card" class="tinder-card">
+  <img id="avatar" class="avatar">
+  <h3 id="nickname"></h3>
+  <p id="age"></p>
+  <p id="cityText"></p>
+  <p id="interests"></p>
+  <p id="bio"></p>
+
+  <div class="buttons">
+    <button onclick="swipeLeft()">👎</button>
+    <button onclick="swipeRight()">❤️</button>
+  </div>
+</div>
+
+<script>
+  let currentUser;
+  let users = [];
+  let index = 0;
+
+  auth.onAuthStateChanged(async user => {
+    if (!user) location.href = "login.html";
+    currentUser = user;
+
+    await loadUsers();
+    showUser();
+  });
+
+  async function loadUsers() {
+    const snap = await db.ref('users').once('value');
+    const all = snap.val() || {};
+    users = Object.keys(all)
+      .filter(id => id !== currentUser.uid)
+      .map(id => ({ id, ...all[id] }));
+  }
+
+  function applyFilters() {
+    const min = Number(minAge.value) || 0;
+    const max = Number(maxAge.value) || 200;
+    const cityFilter = city.value.trim().toLowerCase();
+
+    users = users.filter(u =>
+      u.age >= min &&
+      u.age <= max &&
+      (cityFilter === "" || (u.city || "").toLowerCase() === cityFilter)
+    );
+
+    index = 0;
+    showUser();
+  }
+
+  function showUser() {
+    if (index >= users.length) {
+      card.innerHTML = "<h3>Більше людей немає</h3>";
+      return;
+    }
+
+    const u = users[index];
+
+    avatar.src = u.avatar || "img/user.png";
+    nickname.innerText = u.nickname;
+    age.innerText = "Вік: " + (u.age || "—");
+    cityText.innerText = "Місто: " + (u.city || "—");
+    interests.innerText = "Інтереси: " + (u.interests || "—");
+    bio.innerText = "Опис: " + (u.bio || "—");
+  }
+
+  function swipeLeft() {
+    saveLike(false);
+    index++;
+    showUser();
+  }
+
+  function swipeRight() {
+    saveLike(true);
+    checkMatch(users[index].id);
+    index++;
+    showUser();
+  }
+
+  function saveLike(value) {
+    const target = users[index];
+    db.ref(`likes/${currentUser.uid}`).update({ [target.id]: value });
+  }
+
+  async function checkMatch(targetId) {
+    const snap = await db.ref(`likes/${targetId}`).once('value');
+    const data = snap.val();
+    if (!data) return;
+
+    if (data[currentUser.uid] === true) {
+      const matchId = [currentUser.uid, targetId].sort().join("_");
+
+      await db.ref(`matches/${matchId}`).set({
+        users: [currentUser.uid, targetId],
+        createdAt: firebase.database.ServerValue.TIMESTAMP
+      });
+
+      alert("У вас MATCH! 🎉");
+      location.href = "chat.html?match=" + matchId;
+    }
+  }
+</script>
+
+</body>
+</html>

@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+  <meta charset="UTF-8">
+  <title>Instinct+ — Головна</title>
+  <link rel="stylesheet" href="style.css">
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-database-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-storage-compat.js"></script>
+  <script src="firebase-init.js"></script>
+</head>
+
+<body class="home-page" style="visibility:hidden">
+
+<div class="inner-bg"></div>
+
+<header class="topbar">
+  <h1>Instinct+</h1>
+  <div>
+    <button class="btn topbar-btn" onclick="location.href='profile.html'">Профіль</button>
+    <button class="btn logout topbar-btn" onclick="logout()">Вийти</button>
+  </div>
+</header>
+
+<div class="layout">
+  <aside class="sidebar-left">
+    <div class="menu-top">
+      <div class="menu-item">Головна</div>
+      <div class="menu-item" onclick="location.href='search.html'">Пошук людей</div>
+      <div class="menu-item" onclick="location.href='chat.html'">Чат</div>
+      <div class="menu-item">Налаштування</div>
+    </div>
+    <div class="friends-box">
+      <div class="friend"><span class="status online"></span> Онлайн</div>
+    </div>
+  </aside>
+
+  <main class="content-box">
+    <div class="create-post">
+      <input id="newPost" class="post-input" placeholder="Що у вас нового?">
+      <button class="post-btn" onclick="addPost()">Опублікувати</button>
+    </div>
+
+    <p id="no-posts" class="no-posts" style="display:none;">Поки що немає постів.</p>
+    <div id="posts-container"></div>
+  </main>
+</div>
+
+<script>
+  let currentUser;
+
+  function initHome(user) {
+    currentUser = user;
+    document.body.style.visibility = "visible";
+    history.pushState(null, document.title, location.href);
+    window.addEventListener("popstate", () => {
+      history.pushState(null, document.title, location.href);
+    });
+  }
+
+  if (auth.currentUser) {
+    initHome(auth.currentUser);
+  } else {
+    auth.onAuthStateChanged(user => {
+      if (!user) {
+        location.replace("login.html");
+        return;
+      }
+      initHome(user);
+    });
+  }
+
+  function addPost() {
+    const text = newPost.value.trim();
+    if (!text) return;
+
+    db.ref('posts').push({
+      userId: currentUser.uid,
+      text,
+      createdAt: firebase.database.ServerValue.TIMESTAMP
+    });
+
+    newPost.value = "";
+  }
+
+  const postsContainer = document.getElementById("posts-container");
+  const noPosts = document.getElementById("no-posts");
+
+  const usersCache = {};
+
+  function getUser(uid) {
+    if (usersCache[uid]) return Promise.resolve(usersCache[uid]);
+    return db.ref(`users/${uid}`).once('value').then(snapshot => {
+      const data = snapshot.val() || {};
+      usersCache[uid] = data;
+      return data;
+    });
+  }
+
+  db.ref('posts').orderByChild('createdAt').on('value', async snap => {
+      const posts = [];
+      snap.forEach(child => {
+        const post = child.val();
+        if (post) posts.push(post);
+      });
+
+      posts.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+      postsContainer.innerHTML = "";
+
+      if (posts.length === 0) {
+        noPosts.style.display = "block";
+        return;
+      }
+
+      noPosts.style.display = "none";
+
+      for (const post of posts) {
+        const user = await getUser(post.userId);
+
+        const div = document.createElement("div");
+        div.className = "post";
+        div.innerHTML = `
+          <b>${user.nickname || "Користувач"}</b>
+          <p>${post.text}</p>
+        `;
+        postsContainer.appendChild(div);
+      }
+    });
+</script>
+
+</body>
+</html>

@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+  <meta charset="UTF-8">
+  <title>Instinct+ — Матчі</title>
+  <link rel="stylesheet" href="style.css">
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-database-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-storage-compat.js"></script>
+  <script src="firebase-init.js"></script>
+</head>
+
+<body>
+
+<header class="topbar">
+  <h1>Instinct+</h1>
+  <div>
+    <button class="btn topbar-btn" onclick="location.href='profile.html'">Профіль</button>
+    <button class="btn logout" onclick="logout()">Вийти</button>
+  </div>
+</header>
+
+<main class="content">
+  <h2>Мої чати</h2>
+  <div id="matchesList">Завантаження...</div>
+</main>
+
+<script>
+  let currentUser;
+
+  function initMatches(user) {
+    currentUser = user;
+    loadMatches();
+  }
+
+  if (auth.currentUser) {
+    initMatches(auth.currentUser);
+  } else {
+    auth.onAuthStateChanged(user => {
+      if (!user) location.href = 'login.html';
+      initMatches(user);
+    });
+  }
+
+  async function loadMatches() {
+    const container = document.getElementById('matchesList');
+    container.innerHTML = '';
+    const snap = await db.ref('matches').once('value');
+    const all = snap.val() || {};
+    const entries = Object.entries(all);
+    if (entries.length === 0) {
+      container.innerText = 'Матчів ще немає.';
+      return;
+    }
+
+    let found = false;
+    for (const [matchId, data] of entries) {
+      const users = data.users || [];
+      if (!users.includes(currentUser.uid)) continue;
+      found = true;
+      const otherId = users.find(id => id !== currentUser.uid);
+      const userSnap = await db.ref(`users/${otherId}`).once('value');
+      const other = userSnap.val() || { nickname: 'Користувач', avatar: 'img/user.png' };
+
+      // compute unread messages since lastSeen
+      const lastSeen = (data.lastSeen && data.lastSeen[currentUser.uid]) || 0;
+      let unread = 0;
+      try {
+        const msgsSnap = await db.ref(`messages/${matchId}/items`).orderByChild('createdAt').startAt(lastSeen + 1).once('value');
+        msgsSnap.forEach(child => {
+          const m = child.val();
+          if (m && m.from !== currentUser.uid) unread++;
+        });
+      } catch (e) {
+        console.warn('unread check failed', e);
+      }
+
+      const item = document.createElement('div');
+      item.className = 'match-item';
+      item.innerHTML = `
+        <img src="${other.avatar || 'img/user.png'}" class="avatar-small">
+        <div class="match-info">
+          <b>${other.nickname || 'Користувач'}</b>
+        </div>
+        ${unread > 0 ? `<div class="unread-badge">${unread}</div>` : ''}
+      `;
+      item.addEventListener('click', () => {
+        location.href = 'chat.html?match=' + matchId;
+      });
+      container.appendChild(item);
+    }
+
+    if (!found) container.innerText = 'Матчів ще немає.';
+  }
+</script>
+
+</body>
+</html>

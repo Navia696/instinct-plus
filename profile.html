@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+  <meta charset="UTF-8">
+  <title>Instinct+ — Профіль</title>
+  <link rel="stylesheet" href="style.css">
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-database-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-storage-compat.js"></script>
+  <script src="firebase-init.js"></script>
+</head>
+
+<body class="profile-page" style="visibility:hidden">
+
+<div class="inner-bg"></div>
+
+<header class="topbar">
+  <h1>Instinct+</h1>
+  <div>
+    <button class="btn topbar-btn" onclick="location.href='profile.html'">Профіль</button>
+    <button class="btn logout" onclick="logout()">Вийти</button>
+  </div>
+</header>
+
+<div class="profile-wrapper">
+
+  <div class="cover-photo">
+    <img id="cover" src="img/default-cover.jpg">
+  </div>
+
+  <div class="profile-header">
+    <img id="avatar" class="avatar" src="img/user.png">
+    <div class="profile-info">
+      <h2 id="nickname">Нікнейм</h2>
+      <p class="friends-count">0 друзів</p>
+    </div>
+  </div>
+
+  <div class="profile-content">
+    <h3>Інформація</h3>
+    <p id="age">Вік: —</p>
+    <p id="bio">Опис: —</p>
+    <p id="interests">Інтереси: —</p>
+
+    <h3>Мої публікації</h3>
+    <p id="no-posts">Тут будуть ваші пости.</p>
+    <div id="posts-container"></div>
+  </div>
+
+</div>
+
+<script>
+  let currentUser;
+
+  function initProfile(user) {
+    currentUser = user;
+    document.body.style.visibility = "visible";
+    history.pushState(null, document.title, location.href);
+    window.addEventListener("popstate", () => {
+      history.pushState(null, document.title, location.href);
+    });
+
+    db.ref(`users/${user.uid}`).on('value', snapshot => {
+      const data = snapshot.val() || {};
+      nickname.innerText = data.nickname || "Нікнейм";
+      age.innerText = "Вік: " + (data.age || "—");
+      bio.innerText = "Опис: " + (data.bio || "—");
+      interests.innerText = "Інтереси: " + (data.interests || "—");
+
+      if (data.avatar) avatar.src = data.avatar;
+      if (data.cover) cover.src = data.cover;
+    });
+
+    db.ref('posts').orderByChild('createdAt').on('value', snap => {
+      const posts = [];
+      snap.forEach(child => {
+        const post = child.val();
+        if (post.userId === user.uid) {
+          posts.push(post);
+        }
+      });
+
+      posts.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+      postsContainer.innerHTML = "";
+
+      if (posts.length === 0) {
+        noPosts.style.display = "block";
+        return;
+      }
+      noPosts.style.display = "none";
+
+      posts.forEach(post => {
+        const div = document.createElement("div");
+        div.className = "post";
+        div.innerHTML = `<p>${post.text}</p>`;
+        postsContainer.appendChild(div);
+      });
+    });
+  }
+
+  if (auth.currentUser) {
+    initProfile(auth.currentUser);
+  } else {
+    auth.onAuthStateChanged(user => {
+      if (!user) {
+        location.replace("login.html");
+        return;
+      }
+      initProfile(user);
+    });
+  }
+</script>
+
+</body>
+</html>
