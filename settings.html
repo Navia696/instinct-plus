@@ -8,87 +8,184 @@
   <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-database-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-storage-compat.js"></script>
   <script src="firebase-init.js"></script>
+  <script src="notifications.js"></script>
 </head>
 
-<body class="settings-page">
+<body>
 
 <header class="topbar">
-  <h1>Instinct+</h1>
+  <div class="topbar-left" style="display: flex; align-items: center; gap: 15px;">
+    <div class="notification-bell" onclick="toggleNotifications(event)">
+      <button class="bell-icon">🔔</button>
+      <span id="notificationBadge" class="notification-badge" style="display:none;">0</span>
+    </div>
+    <h1 class="site-title">Instinct+</h1>
+  </div>
   <div>
     <button class="btn topbar-btn" onclick="location.href='home.html'">Головна</button>
     <button class="btn topbar-btn" onclick="location.href='profile.html'">Профіль</button>
     <button class="btn logout" onclick="logout()">Вийти</button>
   </div>
+  
+  <div id="notificationsDropdown" class="notifications-dropdown">
+    <div style="padding:12px; font-weight:bold; border-bottom:1px solid #ddd;">📢 Сповіщення</div>
+    <div id="notificationsList" style="max-height:350px; overflow-y:auto;"></div>
+  </div>
 </header>
 
-<div class="settings-wrapper">
+<div class="settings-container">
+  <h2>⚙️ Налаштування чату</h2>
 
-  <div class="settings-card">
-    <h2>Налаштування чату</h2>
-
-    <div class="field-group">
-      <label>Кольорова тема</label>
-      <select id="chatTheme" class="input">
-        <option value="pink">Ніжно‑рожевий</option>
-        <option value="blue">Ніжно‑голубий</option>
-        <option value="green">Ніжно‑зелений</option>
-      </select>
+  <div class="setting-group">
+    <label>🎨 Тема чату</label>
+    <div class="theme-buttons">
+      <button class="theme-btn theme-pink-btn" data-theme="pink">💗 Рожева</button>
+      <button class="theme-btn theme-blue-btn" data-theme="blue">💙 Синя</button>
+      <button class="theme-btn theme-green-btn" data-theme="green">💚 Зелена</button>
     </div>
-
-    <div class="field-group">
-      <label>Фон чату</label>
-      <input type="file" id="chatBgFile" accept="image/*" class="input">
-    </div>
-
-    <button class="btn save-btn" onclick="saveChatSettings()">Зберегти</button>
   </div>
 
+  <div class="setting-group">
+    <label>🖼️ Фон чату</label>
+    <input type="file" id="bgInput" accept="image/*">
+    <div id="bgPreview" class="bg-preview"></div>
+  </div>
+
+  <button class="save-btn" onclick="saveSettings()">💾 Зберегти налаштування</button>
+  <div id="infoMessage" class="info-message"></div>
 </div>
 
-<script>
-function saveChatSettings() {
-  const theme = chatTheme.value;
-  const file = chatBgFile.files[0];
-
-  localStorage.setItem("chatTheme", theme);
-
-  if (file) {
-    const reader = new FileReader();
-    reader.onload = () => {
-      localStorage.setItem("chatBgFile", reader.result);
-
-      db.ref("settings/" + auth.currentUser.uid).set({
-        theme: theme,
-        bgFile: reader.result
-      });
-
-      window.location.href = "chat.html";
-    };
-    reader.readAsDataURL(file);
-  } else {
-    db.ref("settings/" + auth.currentUser.uid).set({
-      theme: theme,
-      bgFile: null
-    });
-
-    window.location.href = "chat.html";
-  }
+<style>
+.settings-container {
+  max-width: 600px;
+  margin: 80px auto;
+  padding: 30px;
+  background: white;
+  border-radius: 20px;
+  box-shadow: 0 5px 20px rgba(0,0,0,0.1);
 }
+.theme-buttons {
+  display: flex;
+  gap: 15px;
+  flex-wrap: wrap;
+}
+.theme-btn {
+  padding: 10px 20px;
+  border: none;
+  border-radius: 25px;
+  cursor: pointer;
+  font-weight: 500;
+}
+.theme-btn.active {
+  border: 2px solid #333;
+}
+.theme-pink-btn { background: #e91e63; color: white; }
+.theme-blue-btn { background: #0084ff; color: white; }
+.theme-green-btn { background: #4caf50; color: white; }
+.bg-preview {
+  width: 100%;
+  height: 150px;
+  background-size: cover;
+  background-position: center;
+  border-radius: 10px;
+  margin-top: 10px;
+  background-color: #f0f0f0;
+}
+.save-btn {
+  background: #667eea;
+  color: white;
+  border: none;
+  padding: 12px 30px;
+  border-radius: 25px;
+  cursor: pointer;
+  margin-top: 20px;
+  width: 100%;
+}
+.info-message {
+  font-size: 12px;
+  margin-top: 10px;
+  text-align: center;
+}
+</style>
 
-auth.onAuthStateChanged(user => {
-  if (!user) return;
+<script>
+  let currentUser;
+  let selectedBgUrl = "";
 
-  db.ref("settings/" + user.uid).once("value").then(snap => {
-    const s = snap.val() || {};
+  function updatePreview() {
+    const preview = document.getElementById('bgPreview');
+    if (selectedBgUrl) {
+      preview.style.backgroundImage = `url('${selectedBgUrl}')`;
+      preview.style.backgroundSize = "cover";
+    } else {
+      preview.style.backgroundImage = "none";
+    }
+  }
 
-    chatTheme.value = s.theme || "pink";
+  async function saveSettings() {
+    const theme = document.querySelector('.theme-btn.active')?.dataset.theme || "pink";
+    const file = document.getElementById("bgInput").files[0];
+    
+    if (file) {
+      const reader = new FileReader();
+      reader.onload = async () => {
+        const finalBgUrl = reader.result;
+        await db.ref("settings/" + currentUser.uid).set({ theme: theme, bgFile: finalBgUrl });
+        localStorage.setItem("chatTheme", theme);
+        localStorage.setItem("chatBgFile", finalBgUrl);
+        window.location.href = "chat.html";
+      };
+      reader.readAsDataURL(file);
+    } else {
+      await db.ref("settings/" + currentUser.uid).set({ theme: theme, bgFile: null });
+      localStorage.setItem("chatTheme", theme);
+      window.location.href = "chat.html";
+    }
+  }
 
-    if (s.bgFile) {
-      localStorage.setItem("chatBgFile", s.bgFile);
+  document.getElementById('bgInput').addEventListener('change', (e) => {
+    const file = e.target.files[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        selectedBgUrl = event.target.result;
+        updatePreview();
+      };
+      reader.readAsDataURL(file);
     }
   });
-});
+
+  auth.onAuthStateChanged(async user => {
+    if (!user) { location.href = "login.html"; return; }
+    currentUser = user;
+    
+    // ✅ ИНИЦИАЛИЗАЦИЯ УВЕДОМЛЕНИЙ
+    if (typeof initNotifications === 'function') {
+      initNotifications(user.uid);
+    }
+    
+    const snap = await db.ref("settings/" + user.uid).once("value");
+    const s = snap.val() || {};
+    
+    document.querySelectorAll('.theme-btn').forEach(btn => {
+      btn.classList.remove('active');
+      if (btn.dataset.theme === (s.theme || "pink")) btn.classList.add('active');
+    });
+    
+    if (s.bgFile) {
+      selectedBgUrl = s.bgFile;
+      updatePreview();
+    }
+  });
+
+  document.querySelectorAll('.theme-btn').forEach(btn => {
+    btn.onclick = () => {
+      document.querySelectorAll('.theme-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+    };
+  });
 </script>
 
 </body>
