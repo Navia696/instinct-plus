@@ -4,54 +4,65 @@
   <meta charset="UTF-8">
   <title>Instinct+ — Пошук</title>
   <link rel="stylesheet" href="style.css">
+  <style>
+   
+  </style>
   <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-database-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-storage-compat.js"></script>
   <script src="firebase-init.js"></script>
-</head>
+  <script src="notifications.js"></script>
 
 <body class="search-page">
 
 <div class="inner-bg"></div>
 
 <header class="topbar">
-  <h1 class="site-title">Instinct+</h1>
-  <div class="topbar-actions-left">
-    <button class="btn topbar-btn" onclick="location.href='home.html'">Головна</button>
+  <div class="topbar-left">
+    <div class="notification-bell" onclick="toggleNotifications(event)">
+      <button class="bell-icon">🔔</button>
+      <span id="notificationBadge" class="notification-badge" style="display:none;">0</span>
+    </div>
+    <h1 class="site-title">Instinct+</h1>
   </div>
 
   <div class="topbar-actions-right">
+     <button class="btn topbar-btn" onclick="location.href='home.html'">Головна</button>
     <button class="btn topbar-btn" onclick="location.href='profile.html'">Профіль</button>
     <button class="btn logout" onclick="logout()">Вийти</button>
+  </div>
+  
+  <div id="notificationsDropdown" class="notifications-dropdown">
+    <div style="padding:10px; font-weight:bold; border-bottom:1px solid #ddd;">📢 Сповіщення</div>
+    <div id="notificationsList"></div>
   </div>
 </header>
 
 <div class="search-content">
-  <h2>Пошук людей</h2>
+  <h2>🔍 Пошук людей</h2>
 
   <div class="filters">
-    <input id="minAge" type="number" min="12" max="70" value="12" placeholder="Мін. вік (12+)">
-    <input id="maxAge" type="number" min="12" max="70" value="70" placeholder="Макс. вік (до 70)">
-    <input id="city" type="text" placeholder="Місто" list="city-suggestions">
-    <button onclick="applyFilters()">Фільтрувати</button>
+    <div class="filter-group">
+      <label>Від 12✨</label>
+      <input id="minAge" type="number" min="12" max="70" value="12" placeholder="12">
+    </div>
+    <div class="filter-group">
+      <label>До 70✨</label>
+      <input id="maxAge" type="number" min="12" max="70" value="70" placeholder="70">
+    </div>
+    <div class="filter-group">
+      <label>Місто 📍</label>
+      <input id="city" type="text" placeholder="Місто" list="city-suggestions">
+    </div>
+    <button onclick="applyFilters()">🔍 Фільтрувати</button>
   </div>
+  
+  <div id="ageWarning" class="age-warning-message"></div>
+  
   <datalist id="city-suggestions"></datalist>
 
-  <!-- КАРТОЧКА -->
-<div id="card" class="tinder-card">
-  <img id="avatar" class="avatar">
-  <h3 id="nickname"></h3>
-  <p id="age"></p>
-  <p id="cityText"></p>
-  <p id="interests"></p>
-  <p id="bio"></p>
-
-  <div class="buttons">
-    <button onclick="swipeLeft()">👎</button>
-    <button onclick="swipeRight()">❤️</button>
-  </div>
-</div>
+  <div id="card" class="tinder-card"></div>
 </div>
 
 <script>
@@ -59,37 +70,78 @@
   let users = [];
   let allUsers = [];
   let index = 0;
+  let notifications = [];
+  
   const minAge = document.getElementById('minAge');
   const maxAge = document.getElementById('maxAge');
   const city = document.getElementById('city');
   const citySuggestions = document.getElementById('city-suggestions');
+  const card = document.getElementById('card');
+  const ageWarning = document.getElementById('ageWarning');
 
   auth.onAuthStateChanged(async user => {
     if (!user) location.href = "login.html";
     currentUser = user;
-
+    
+    // Инициализация уведомлений
+    if (typeof initNotifications === 'function') {
+      initNotifications(user.uid);
+    }
+    
     await loadUsers();
-    setupBackgroundButtons();
+    startNotificationListeners();
     showUser();
+    
+    minAge.placeholder = "12";
+    maxAge.placeholder = "70";
   });
 
+  function validateAge(value, field) {
+    let num = Number(value);
+    if (isNaN(num)) return field === 'min' ? 12 : 70;
+    if (field === 'min') {
+      if (num < 12) {
+        ageWarning.textContent = "⚠️ Вік не може бути менше 12 років!";
+        ageWarning.style.display = "block";
+        setTimeout(() => { ageWarning.style.display = "none"; }, 3000);
+        return 12;
+      }
+    }
+    if (field === 'max') {
+      if (num > 70) {
+        ageWarning.textContent = "⚠️ Вік не може бути більше 70 років!";
+        ageWarning.style.display = "block";
+        setTimeout(() => { ageWarning.style.display = "none"; }, 3000);
+        return 70;
+      }
+      if (num < 12) return 12;
+    }
+    ageWarning.style.display = "none";
+    return num;
+  }
+
   function applyFilters() {
-    const min = Math.max(12, Number(minAge.value) || 12);
-    const max = Math.min(70, Number(maxAge.value) || 70);
-    const cityFilter = city.value.trim().toLowerCase();
-
-    if (minAge.value && minAge.value < 12) {
-      minAge.value = 12;
+    let min = validateAge(minAge.value, 'min');
+    let max = validateAge(maxAge.value, 'max');
+    
+    if (min > max) {
+      [min, max] = [max, min];
     }
-    if (maxAge.value && maxAge.value > 70) {
-      maxAge.value = 70;
-    }
-
+    
+    minAge.value = min;
+    maxAge.value = max;
+    
+    let cityFilter = city.value.trim().toLowerCase();
+    cityFilter = cityFilter.replace(/[^\w\sа-яіїєґ]/gi, '');
+    
     const filtered = allUsers.filter(u => {
       const age = Number(u.age) || 0;
-      const userCity = (u.city || "").toLowerCase();
-      return age >= min && age <= max &&
-        (cityFilter === "" || userCity === cityFilter);
+      let userCity = (u.city || "").toLowerCase();
+      userCity = userCity.replace(/[^\w\sа-яіїєґ]/gi, '');
+      
+      const cityMatch = cityFilter === "" || userCity.includes(cityFilter);
+      
+      return age >= min && age <= max && cityMatch;
     });
 
     users = filtered;
@@ -98,45 +150,18 @@
   }
 
   function populateCitySuggestions(allUsers) {
-    const cityCounts = allUsers.reduce((acc, user) => {
-      const city = (user.city || "").trim();
-      if (!city) return acc;
-      const key = city.toLowerCase();
-      acc[key] = acc[key] || { label: city, count: 0 };
-      acc[key].count += 1;
-      return acc;
-    }, {});
-
+    const citySet = new Set();
+    allUsers.forEach(user => {
+      const cityName = (user.city || "").trim();
+      if (cityName) citySet.add(cityName);
+    });
+    
     citySuggestions.innerHTML = "";
-    Object.values(cityCounts)
-      .sort((a, b) => b.count - a.count)
-      .forEach(item => {
-        const option = document.createElement('option');
-        option.value = item.label;
-        citySuggestions.appendChild(option);
-      });
-  }
-
-  function setSearchBackground(mode) {
-    const innerBg = document.querySelector('.inner-bg');
-    const presets = {
-      default: "linear-gradient(135deg, rgba(255, 164, 189, 0.85), rgba(255, 224, 178, 0.85))",
-      cozy: "linear-gradient(135deg, rgba(244, 195, 142, 0.88), rgba(217, 147, 125, 0.9))",
-      neon: "linear-gradient(135deg, rgba(83, 63, 215, 0.9), rgba(255, 95, 109, 0.9))"
-    };
-    innerBg.style.background = presets[mode] || presets.default;
-    localStorage.setItem('searchBg', mode);
-    document.querySelectorAll('.bg-button').forEach(btn => {
-      btn.classList.toggle('active', btn.dataset.bg === mode);
+    Array.from(citySet).sort().forEach(cityName => {
+      const option = document.createElement('option');
+      option.value = cityName;
+      citySuggestions.appendChild(option);
     });
-  }
-
-  function setupBackgroundButtons() {
-    document.querySelectorAll('.bg-button').forEach(button => {
-      button.addEventListener('click', () => setSearchBackground(button.dataset.bg));
-    });
-    const stored = localStorage.getItem('searchBg') || 'default';
-    setSearchBackground(stored);
   }
 
   async function loadUsers() {
@@ -145,63 +170,126 @@
     allUsers = Object.keys(all)
       .filter(id => id !== currentUser.uid)
       .map(id => ({ id, ...all[id] }));
-
+    
+    allUsers.forEach(u => {
+      if (!u.age) u.age = 0;
+    });
+    
     populateCitySuggestions(allUsers);
-    users = allUsers;
+    users = [...allUsers];
+  }
+
+  function escapeHtml(text) {
+    if (!text) return '';
+    return text.replace(/[&<>]/g, function(m) {
+      if (m === '&') return '&amp;';
+      if (m === '<') return '&lt;';
+      if (m === '>') return '&gt;';
+      return m;
+    });
   }
 
   function showUser() {
     if (index >= users.length) {
-      card.innerHTML = "<h3>Більше людей немає</h3>";
+      card.innerHTML = `
+        <div class="no-users">
+          <h3>😔 Більше людей немає</h3>
+          <p>Спробуйте змінити фільтри</p>
+        </div>
+      `;
       return;
     }
 
     const u = users[index];
-
-    avatar.src = u.avatar || "img/user.png";
-    nickname.innerText = u.nickname;
-    age.innerText = "Вік: " + (u.age || "—");
-    cityText.innerText = "Місто: " + (u.city || "—");
-    interests.innerText = "Інтереси: " + (u.interests || "—");
-    bio.innerText = "Опис: " + (u.bio || "—");
+    
+    card.innerHTML = `
+      <img class="avatar" src="${u.avatar || 'img/user.png'}" onerror="this.src='img/user.png'">
+      <h3>${escapeHtml(u.nickname || 'Користувач')}</h3>
+      <p>🎂 Вік: ${u.age || '—'}</p>
+      <p>📍 Місто: ${u.city || '—'}</p>
+      <p>💡 Інтереси: ${u.interests || '—'}</p>
+      <p>📝 Про себе: ${u.bio || '—'}</p>
+      <div class="buttons">
+        <button onclick="swipeLeft()">👎</button>
+        <button onclick="swipeRight()">❤️</button>
+      </div>
+    `;
   }
 
   function swipeLeft() {
-    saveLike(false);
     index++;
     showUser();
   }
 
-  function swipeRight() {
-    saveLike(true);
-    checkMatch(users[index].id);
-    index++;
-    showUser();
-  }
-
-  function saveLike(value) {
+  async function swipeRight() {
     const target = users[index];
-    db.ref(`likes/${currentUser.uid}`).update({ [target.id]: value });
+    if (!target) return;
+    
+    await db.ref(`likes_sent/${currentUser.uid}/${target.id}`).set({
+      userId: target.id,
+      timestamp: Date.now()
+    });
+    
+    await checkMatch(target.id);
+    index++;
+    showUser();
   }
 
   async function checkMatch(targetId) {
-    const snap = await db.ref(`likes/${targetId}`).once('value');
-    const data = snap.val();
-    if (!data) return;
-
-    if (data[currentUser.uid] === true) {
+    const targetUser = users[index];
+    const targetNickname = targetUser?.nickname || 'Користувач';
+    
+    const snap = await db.ref(`likes_sent/${targetId}/${currentUser.uid}`).once('value');
+    
+    if (snap.exists()) {
       const matchId = [currentUser.uid, targetId].sort().join("_");
-
+      
       await db.ref(`matches/${matchId}`).set({
         users: [currentUser.uid, targetId],
-        createdAt: firebase.database.ServerValue.TIMESTAMP
+        createdAt: Date.now()
       });
-
-      alert("У вас MATCH! 🎉");
-      location.href = "chat.html?match=" + matchId;
+      
+      // ✅ УВЕДОМЛЕНИЕ О МЭТЧЕ через sendNotification
+      if (typeof sendNotification === 'function') {
+        await sendNotification(targetId, 'match', currentUser.uid);
+        await sendNotification(currentUser.uid, 'match', targetId);
+      }
+      
+      alert("🎉 У вас MATCH! 🎉");
+      location.href = "chat.html";
+    } else {
+      // ✅ УВЕДОМЛЕНИЕ О ЛАЙКЕ через sendNotification
+      if (typeof sendNotification === 'function') {
+        await sendNotification(targetId, 'like', currentUser.uid);
+      }
     }
   }
 
+  function startNotificationListeners() {
+    db.ref(`likes_sent/${currentUser.uid}`).on('child_added', () => {
+      // Обновляем через notifications.js
+      if (typeof loadNotifications === 'function') {
+        // loadNotifications автоматически сработает через initNotifications
+      }
+    });
+  }
+  
+  // Функция для обновления UI уведомлений (использует notifications.js)
+  function toggleNotifications(event) {
+    event.stopPropagation();
+    const dropdown = document.getElementById('notificationsDropdown');
+    if (dropdown) {
+      dropdown.classList.toggle('show');
+    }
+  }
+  
+  document.addEventListener('click', (e) => {
+    const dropdown = document.getElementById('notificationsDropdown');
+    const bell = document.querySelector('.notification-bell');
+    if (bell && dropdown && !bell.contains(e.target) && dropdown.classList.contains('show')) {
+      dropdown.classList.remove('show');
+    }
+  });
 </script>
 
 </body>
