@@ -8,67 +8,61 @@
   <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-database-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-storage-compat.js"></script>
   <script src="firebase-init.js"></script>
-
-  <style>
-    body.chat-page { visibility: hidden; }
-  </style>
-
-  <script>
-    function applyChatSettings() {
-      const theme = localStorage.getItem("chatTheme") || "pink";
-      const bgFile = localStorage.getItem("chatBgFile") || "";
-
-      document.body.classList.remove("theme-pink", "theme-blue", "theme-green");
-      document.body.classList.add("theme-" + theme);
-
-      const msgBox = document.querySelector(".messages-container");
-
-      if (bgFile) {
-        msgBox.style.backgroundImage = `url('${bgFile}')`;
-      } else {
-        msgBox.style.backgroundImage = "none";
-      }
-    }
-  </script>
-
+  <script src="notifications.js"></script>
 </head>
 
-<body class="chat-page theme-pink">
+<body class="chat-page">
 
 <header class="topbar">
-  <h1 class="site-title">Instinct+</h1>
-
-  <div class="topbar-actions-left">
-    <button class="btn topbar-btn" onclick="location.href='home.html'">Головна</button>
+  <div class="topbar-left">
+    <div class="notification-bell" onclick="toggleNotifications(event)">
+      <button class="bell-icon">🔔</button>
+      <span id="notificationBadge" class="notification-badge" style="display:none;">0</span>
+    </div>
+    <h1 class="site-title">Instinct+</h1>
   </div>
 
   <div class="topbar-actions-right">
+    <button class="btn topbar-btn" onclick="location.href='home.html'">Головна</button>
     <button class="btn topbar-btn" onclick="location.href='profile.html'">Профіль</button>
+    <button class="btn topbar-btn" onclick="location.href='settings.html'">⚙️ Налаштування</button>
     <button class="btn logout" onclick="logout()">Вийти</button>
+  </div>
+
+  <div id="notificationsDropdown" class="notifications-dropdown">
+    <div style="padding:12px; font-weight:bold; border-bottom:1px solid #2b2b2b;">📢 Сповіщення</div>
+    <div id="notificationsList" style="max-height:350px; overflow-y:auto;"></div>
   </div>
 </header>
 
 <div class="chat-container">
 
+  <!-- ЛЕВАЯ ПАНЕЛЬ -->
   <div class="matches-list">
-    <h3>Мої матчі</h3>
+    <h3>💬 Чати</h3>
     <div id="matchesList" class="matches-items"></div>
   </div>
 
-  <div class="chat-area">
+  <!-- ПРАВАЯ ПАНЕЛЬ -->
+  <div class="chat-area" id="chatArea">
 
     <div class="chat-topbar">
       <div class="chat-info">
-        <img id="chatAvatar" class="chat-avatar">
+        <img id="chatAvatar" class="chat-avatar" src="img/user.png">
         <div class="chat-header-text">
-          <h4 id="chatNickname"></h4>
+          <h4 id="chatNickname">Оберіть чат</h4>
+          <div style="display: flex; align-items: center; gap: 5px;">
+            <span id="chatStatusDot" style="width: 10px; height: 10px; border-radius: 50%; background: #9e9e9e; display: inline-block;"></span>
+            <span id="chatStatusText" style="font-size: 12px; color: #666;">Офлайн</span>
+          </div>
         </div>
       </div>
     </div>
 
-    <div class="messages-container empty">
-      <p>Виберіть чат, щоб розпочати</p>
+    <div id="messagesContainer" class="messages-container empty">
+      <p>💬 Виберіть чат, щоб розпочати спілкування</p>
     </div>
 
     <div class="chat-footer">
@@ -79,117 +73,83 @@
   </div>
 </div>
 
+<script src="chat.js"></script>
+
 <script>
-  let currentUser;
-  let currentMatch;
-  let matches = [];
+// Инициализация онлайна для текущего пользователя
+auth.onAuthStateChanged(user => {
+  if (user && typeof initOnlineStatus === 'function') {
+    initOnlineStatus(user.uid);
+  }
+});
 
-  auth.onAuthStateChanged(user => {
-    if (!user) {
-      location.href = "login.html";
-      return;
-    }
-
-    db.ref("settings/" + user.uid).once("value").then(snap => {
-      const s = snap.val() || {};
-
-      localStorage.setItem("chatTheme", s.theme || "pink");
-
-      if (s.bgFile) {
-        localStorage.setItem("chatBgFile", s.bgFile);
+// Функция для обновления статуса в шапке чата
+function updateChatStatus(userId) {
+  if (!userId) return;
+  
+  const statusDot = document.getElementById('chatStatusDot');
+  const statusText = document.getElementById('chatStatusText');
+  
+  if (typeof subscribeToUserStatus === 'function') {
+    subscribeToUserStatus(userId, (isOnline) => {
+      if (statusDot) {
+        statusDot.style.backgroundColor = isOnline ? '#44b700' : '#9e9e9e';
       }
-
-      applyChatSettings();
-      document.body.style.visibility = "visible";
-
-      initChat(user);
+      if (statusText) {
+        statusText.textContent = isOnline ? 'Онлайн' : 'Офлайн';
+        statusText.style.color = isOnline ? '#44b700' : '#666';
+      }
     });
-  });
-
-  function initChat(user) {
-    currentUser = user;
-    loadMatches();
   }
+}
 
-  async function loadMatches() {
-    const snap = await db.ref('matches').once('value');
-    const allMatches = snap.val() || {};
+// Переопределяем открытие чата для добавления статуса
+const originalSelectChat = window.selectChat;
+if (originalSelectChat) {
+  window.selectChat = function(chatId, otherUserId, otherUserNickname, otherUserAvatar) {
+    originalSelectChat(chatId, otherUserId, otherUserNickname, otherUserAvatar);
+    updateChatStatus(otherUserId);
+  };
+}
+
+// Дополнительная функция для отправки сообщений с уведомлениями
+window.sendMessage = async function() {
+  const msgInput = document.getElementById("msg");
+  const text = msgInput ? msgInput.value.trim() : "";
+  if (!text) return;
+  
+  const currentChatId = window.currentChatId;
+  const currentChatWith = window.currentChatWith;
+  
+  if (!currentChatId || !currentChatWith) {
+    console.log("Чат не выбран");
+    return;
+  }
+  
+  try {
+    await db.ref(`messages/${currentChatId}/items`).push({
+      text: text,
+      from: auth.currentUser.uid,
+      createdAt: Date.now()
+    });
     
-    matches = Object.keys(allMatches)
-      .filter(matchId => matchId.includes(currentUser.uid))
-      .map(matchId => {
-        const match = allMatches[matchId];
-        const otherUid = match.users.find(uid => uid !== currentUser.uid);
-        return { matchId, otherUid, ...match };
-      });
-
-    renderMatchesList();
-  }
-
-  async function renderMatchesList() {
-    const matchesList = document.getElementById('matchesList');
-    matchesList.innerHTML = '';
-
-    for (const match of matches) {
-      const userSnap = await db.ref(`users/${match.otherUid}`).once('value');
-      const userData = userSnap.val();
-
-      const div = document.createElement('div');
-      div.className = 'match-item-chat';
-      div.innerHTML = `
-        <img class="match-avatar" src="${userData.avatar || 'img/user.png'}" alt="avatar">
-        <div class="match-info">
-          <p class="match-name">${userData.nickname}</p>
-          <p class="match-preview">Натисніть для чату</p>
-        </div>
-      `;
-
-      div.onclick = () => selectMatch(match.matchId, userData);
-
-      matchesList.appendChild(div);
+    msgInput.value = "";
+    
+    setTimeout(() => {
+      const container = document.getElementById("messagesContainer");
+      if (container) container.scrollTop = container.scrollHeight;
+    }, 100);
+    
+    if (currentChatWith !== auth.currentUser.uid && typeof sendNotification === 'function') {
+      await sendNotification(currentChatWith, 'message', auth.currentUser.uid, null, text);
     }
+    
+    console.log("✅ Сообщение отправлено");
+  } catch(error) {
+    console.error("Ошибка отправки:", error);
+    alert("Ошибка: " + error.message);
   }
-
-  function selectMatch(matchId, userData) {
-    currentMatch = matchId;
-    chatNickname.innerText = userData.nickname;
-    chatAvatar.src = userData.avatar || 'img/user.png';
-
-    document.querySelectorAll('.match-item-chat').forEach(item => {
-      item.classList.remove('active');
-    });
-    event.currentTarget.classList.add('active');
-
-    loadMessages();
-  }
-
-  function loadMessages() {
-    const messagesContainer = document.querySelector('.messages-container');
-    db.ref(`messages/${currentMatch}/items`).orderByChild('createdAt').on('value', snap => {
-      messagesContainer.innerHTML = "";
-      snap.forEach(child => {
-        const m = child.val();
-        const div = document.createElement("div");
-        div.className = (m.from === currentUser.uid) ? "message-bubble sent" : "message-bubble received";
-        div.innerText = m.text;
-        messagesContainer.appendChild(div);
-      });
-      messagesContainer.scrollTop = messagesContainer.scrollHeight;
-    });
-  }
-
-  function sendMessage() {
-    const text = msg.value.trim();
-    if (!text || !currentMatch) return;
-
-    db.ref(`messages/${currentMatch}/items`).push({
-      from: currentUser.uid,
-      text,
-      createdAt: firebase.database.ServerValue.TIMESTAMP
-    });
-
-    msg.value = "";
-  }
+};
 </script>
 
 </body>
