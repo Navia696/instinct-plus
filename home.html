@@ -4,22 +4,39 @@
   <meta charset="UTF-8">
   <title>Instinct+ — Головна</title>
   <link rel="stylesheet" href="style.css">
+
   <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-database-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-storage-compat.js"></script>
+
   <script src="firebase-init.js"></script>
+  <script src="notifications.js"></script>
 </head>
 
-<body class="home-page" style="visibility:hidden">
+<body class="home-page">
 
 <div class="inner-bg"></div>
 
 <header class="topbar">
-  <h1>Instinct+</h1>
-  <div>
+  <div class="topbar-left" style="display: flex; align-items: center; gap: 15px;">
+    <div class="notification-bell" onclick="toggleNotifications(event)">
+      <button class="bell-icon">🔔</button>
+      <span id="notificationBadge" class="notification-badge" style="display:none;">0</span>
+    </div>
+    <h1 class="site-title">Instinct+</h1>
+  </div>
+  
+  <div class="topbar-actions-left">
     <button class="btn topbar-btn" onclick="location.href='profile.html'">Профіль</button>
     <button class="btn logout topbar-btn" onclick="logout()">Вийти</button>
+  </div>
+  
+  <div id="notificationsDropdown" class="notifications-dropdown">
+    <div style="padding:12px; font-weight:bold; border-bottom:1px solid #ddd; background:#000000; border-radius:12px 12px 0 0;">
+      📢 Сповіщення
+    </div>
+    <div id="notificationsList" style="max-height:350px; overflow-y:auto;"></div>
   </div>
 </header>
 
@@ -29,7 +46,7 @@
       <div class="menu-item">Головна</div>
       <div class="menu-item" onclick="location.href='search.html'">Пошук людей</div>
       <div class="menu-item" onclick="location.href='chat.html'">Чат</div>
-      <div class="menu-item" onclick="location.href='chat.html'">Налаштування</div>
+      <div class="menu-item" onclick="location.href='settings.html'">Налаштування</div>
     </div>
     <div class="friends-box">
       <div class="friend"><span class="status online"></span> Онлайн</div>
@@ -38,95 +55,262 @@
 
   <main class="content-box">
     <div class="create-post">
-      <input id="newPost" class="post-input" placeholder="Що у вас нового?">
-      <button class="post-btn" onclick="addPost()">Опублікувати</button>
+      <input id="postText" class="post-input" placeholder="Що у вас нового?">
+      <button id="sendPost">Опублікувати</button>
     </div>
-
-    <p id="no-posts" class="no-posts" style="display:none;">Поки що немає постів.</p>
     <div id="posts-container"></div>
   </main>
 </div>
 
 <script>
-  let currentUser;
+let currentUserGlobal = null;
+let activeStatusSubscriptions = {};
 
-  function initHome(user) {
-    currentUser = user;
-    document.body.style.visibility = "visible";
-    history.pushState(null, document.title, location.href);
-    window.addEventListener("popstate", () => {
-      history.pushState(null, document.title, location.href);
-    });
+function goToUserProfile(userId) {
+  sessionStorage.setItem('viewingUserId', userId);
+  location.href = 'profile.html';
+}
+
+function escapeHtml(str) {
+  if (!str) return "";
+  return str.replace(/[&<>]/g, function(m) {
+    if (m === "&") return "&amp;";
+    if (m === "<") return "&lt;";
+    if (m === ">") return "&gt;";
+    return m;
+  });
+}
+
+auth.onAuthStateChanged(async user => {
+  if (!user) {
+    location.replace("login.html");
+    return;
   }
-
-  if (auth.currentUser) {
-    initHome(auth.currentUser);
-  } else {
-    auth.onAuthStateChanged(user => {
-      if (!user) {
-        location.replace("login.html");
-        return;
-      }
-      initHome(user);
-    });
+  
+  currentUserGlobal = user;
+  
+  // Инициализация онлайна текущего пользователя
+  if (typeof initOnlineStatus === 'function') {
+    initOnlineStatus(user.uid);
   }
-
-  function addPost() {
-    const text = newPost.value.trim();
+  
+  if (typeof initNotifications === 'function') {
+    initNotifications(user.uid);
+  }
+  
+  document.getElementById("sendPost").onclick = () => {
+    const text = document.getElementById("postText").value.trim();
     if (!text) return;
-
-    db.ref('posts').push({
-      userId: currentUser.uid,
-      text,
-      createdAt: firebase.database.ServerValue.TIMESTAMP
+    
+    db.ref("posts").push({
+      text: text,
+      userId: currentUserGlobal.uid,
+      createdAt: Date.now()
+    }).then(() => {
+      document.getElementById("postText").value = "";
+    }).catch(err => {
+      console.error(err);
+      alert("Ошибка: " + err.message);
     });
-
-    newPost.value = "";
-  }
-
-  const postsContainer = document.getElementById("posts-container");
-  const noPosts = document.getElementById("no-posts");
-
-  const usersCache = {};
-
-  function getUser(uid) {
-    if (usersCache[uid]) return Promise.resolve(usersCache[uid]);
-    return db.ref(`users/${uid}`).once('value').then(snapshot => {
-      const data = snapshot.val() || {};
-      usersCache[uid] = data;
-      return data;
-    });
-  }
-
-  db.ref('posts').orderByChild('createdAt').on('value', async snap => {
+  };
+  
+  function loadPosts() {
+    db.ref("posts").orderByChild("createdAt").on("value", async (snapshot) => {
       const posts = [];
-      snap.forEach(child => {
-        const post = child.val();
-        if (post) posts.push(post);
+      snapshot.forEach(child => {
+        posts.push({ id: child.key, ...child.val() });
       });
-
-      posts.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
-      postsContainer.innerHTML = "";
-
+      posts.reverse();
+      
+      const container = document.getElementById("posts-container");
+      container.innerHTML = "";
+      
       if (posts.length === 0) {
-        noPosts.style.display = "block";
+        container.innerHTML = "<p style='text-align:center;color:#999;padding:20px;'>Немає постів. Будьте першим!</p>";
         return;
       }
-
-      noPosts.style.display = "none";
-
+      
       for (const post of posts) {
-        const user = await getUser(post.userId);
-
-        const div = document.createElement("div");
-        div.className = "post";
-        div.innerHTML = `
-          <b>${user.nickname || "Користувач"}</b>
-          <p>${post.text}</p>
+        const userSnap = await db.ref(`users/${post.userId}`).once("value");
+        const author = userSnap.val() || {};
+        
+        const likesSnap = await db.ref(`likes/${post.id}`).once("value");
+        const likesCount = likesSnap.exists() ? Object.keys(likesSnap.val()).length : 0;
+        const userLike = await db.ref(`likes/${post.id}/${currentUserGlobal.uid}`).once("value");
+        
+        const cityText = (author.country || author.city) ? `${author.country || ''} ${author.city || ''}`.trim() : '';
+        
+        const postDiv = document.createElement("div");
+        postDiv.className = "post";
+        postDiv.style.cssText = "margin-bottom:20px;padding:15px;background:white;border-radius:8px;box-shadow:0 1px 3px rgba(0,0,0,0.1);";
+        postDiv.innerHTML = `
+          <div style="margin-bottom:10px;">
+            <div style="display: flex; align-items: center; gap: 8px;">
+              <b class="user-nickname" data-user-id="${post.userId}" style="font-size:16px;cursor:pointer;color:#333;text-decoration:none;">${escapeHtml(author.nickname || "Користувач")}</b>
+              <span class="online-status" data-user-id="${post.userId}" style="display: inline-block; width: 10px; height: 10px; border-radius: 50%; background: #9e9e9e;"></span>
+            </div>
+            ${cityText ? `<div style="font-size:12px;color:#999;margin-top:3px;">📍 ${escapeHtml(cityText)}</div>` : ""}
+            <div style="font-size:11px;color:#999;margin-top:5px;">${new Date(post.createdAt).toLocaleString()}</div>
+          </div>
+          <div style="margin-bottom:15px;font-size:15px;">${escapeHtml(post.text)}</div>
+          <div style="display:flex;gap:20px;align-items:center;border-top:1px solid #eee;padding-top:10px;">
+            <button class="like-btn" data-id="${post.id}" style="background:none;border:none;font-size:20px;cursor:pointer;opacity:${userLike.exists() ? '1' : '0.5'};">❤️</button>
+            <span class="like-count" data-id="${post.id}" style="font-size:14px;color:#666;">${likesCount}</span>
+            <button class="comment-toggle" data-id="${post.id}" style="background:none;border:none;font-size:14px;cursor:pointer;color:#666;">💬 Коментарі</button>
+          </div>
+          <div class="comments-area" data-id="${post.id}" style="display:none;margin-top:15px;padding-left:20px;border-left:3px solid #007bff;">
+            <div class="comments-list" data-id="${post.id}" style="margin-bottom:10px;max-height:300px;overflow-y:auto;"></div>
+            <div style="display:flex;gap:10px;margin-top:10px;">
+              <input type="text" class="comment-input" data-id="${post.id}" placeholder="Написати коментар..." style="flex:1;padding:8px;border:1px solid #ddd;border-radius:4px;">
+              <button class="send-comment" data-id="${post.id}" style="padding:8px 15px;background:#007bff;color:white;border:none;border-radius:4px;cursor:pointer;">Відправити</button>
+            </div>
+          </div>
         `;
-        postsContainer.appendChild(div);
+        
+        container.appendChild(postDiv);
+        
+        // Подписка на онлайн-статус автора поста
+        if (typeof subscribeToUserStatus === 'function') {
+          const statusSpan = postDiv.querySelector(`.online-status[data-user-id="${post.userId}"]`);
+          if (statusSpan) {
+            subscribeToUserStatus(post.userId, (isOnline) => {
+              statusSpan.style.backgroundColor = isOnline ? '#44b700' : '#9e9e9e';
+            });
+          }
+        }
+        
+        const userNickname = postDiv.querySelector(".user-nickname");
+        userNickname.onclick = (e) => {
+          e.stopPropagation();
+          goToUserProfile(userNickname.getAttribute('data-user-id'));
+        };
+        
+        const likeBtn = postDiv.querySelector(".like-btn");
+        const likeSpan = postDiv.querySelector(".like-count");
+        
+        likeBtn.onclick = async () => {
+          const likeRef = db.ref(`likes/${post.id}/${currentUserGlobal.uid}`);
+          const exists = (await likeRef.once("value")).exists();
+          if (exists) {
+            await likeRef.remove();
+            likeBtn.style.opacity = "0.5";
+          } else {
+            await likeRef.set(true);
+            likeBtn.style.opacity = "1";
+            if (post.userId !== currentUserGlobal.uid && typeof sendNotification === 'function') {
+              await sendNotification(post.userId, 'like', currentUserGlobal.uid, post.id);
+            }
+          }
+        };
+        
+        db.ref(`likes/${post.id}`).on("value", (snap) => {
+          likeSpan.textContent = Object.keys(snap.val() || {}).length;
+        });
+        
+        // ========== КОММЕНТАРИИ ==========
+        const commentToggle = postDiv.querySelector(".comment-toggle");
+        const commentsArea = postDiv.querySelector(".comments-area");
+        const commentsList = postDiv.querySelector(".comments-list");
+        const commentInput = postDiv.querySelector(".comment-input");
+        const sendComment = postDiv.querySelector(".send-comment");
+        
+        function refreshCommentsList() {
+          db.ref(`comments/${post.id}`).once("value", async (snap) => {
+            commentsList.innerHTML = "";
+            
+            if (!snap.exists()) {
+              commentsList.innerHTML = "<div style='color:#999;padding:10px;text-align:center;'>📝 Немає коментарів</div>";
+              commentToggle.innerHTML = "💬 Коментарі (0)";
+              return;
+            }
+            
+            const comments = [];
+            snap.forEach(c => comments.push({ id: c.key, ...c.val() }));
+            comments.sort((a,b) => a.createdAt - b.createdAt);
+            commentToggle.innerHTML = `💬 Коментарі (${comments.length})`;
+            
+            for (const comment of comments) {
+              const authorSnap = await db.ref(`users/${comment.userId}`).once("value");
+              const commentAuthor = authorSnap.val() || {};
+              const commentDiv = document.createElement("div");
+              commentDiv.style.cssText = "padding:8px;margin-bottom:8px;background:#f8f9fa;border-radius:8px;";
+              commentDiv.innerHTML = `
+                <div style="display:flex;justify-content:space-between;margin-bottom:5px;">
+                  <b style="font-size:12px;color:#007bff;cursor:pointer;" class="comment-user" data-user-id="${comment.userId}">${escapeHtml(commentAuthor.nickname || "Користувач")}</b>
+                  <small style="color:#999;font-size:10px;">${new Date(comment.createdAt).toLocaleTimeString()}</small>
+                </div>
+                <div style="font-size:13px;">${escapeHtml(comment.text)}</div>
+              `;
+              commentsList.appendChild(commentDiv);
+              
+              const commentUserSpan = commentDiv.querySelector(".comment-user");
+              if (commentUserSpan) {
+                commentUserSpan.onclick = (e) => {
+                  e.stopPropagation();
+                  goToUserProfile(commentUserSpan.getAttribute('data-user-id'));
+                };
+              }
+            }
+          });
+        }
+        
+        commentToggle.onclick = () => {
+          if (commentsArea.style.display === "none") {
+            commentsArea.style.display = "block";
+            refreshCommentsList();
+          } else {
+            commentsArea.style.display = "none";
+          }
+        };
+        
+        sendComment.onclick = async () => {
+          const text = commentInput.value.trim();
+          if (!text) {
+            alert("Напишіть коментар!");
+            return;
+          }
+          
+          sendComment.disabled = true;
+          sendComment.textContent = "⏳...";
+          
+          try {
+            await db.ref(`comments/${post.id}`).push({
+              text: text,
+              userId: currentUserGlobal.uid,
+              createdAt: Date.now()
+            });
+            commentInput.value = "";
+            console.log("✅ Комментарий отправлен");
+            
+            if (commentsArea.style.display === "block") {
+              refreshCommentsList();
+            } else {
+              const snap = await db.ref(`comments/${post.id}`).once("value");
+              const count = snap.exists() ? snap.numChildren() : 0;
+              commentToggle.innerHTML = `💬 Коментарі (${count})`;
+            }
+            
+            if (post.userId !== currentUserGlobal.uid && typeof sendNotification === 'function') {
+              await sendNotification(post.userId, 'comment', currentUserGlobal.uid, post.id, text);
+            }
+          } catch (error) {
+            console.error("Ошибка:", error);
+            alert("Помилка: " + error.message);
+          } finally {
+            sendComment.disabled = false;
+            sendComment.textContent = "Відправити";
+          }
+        };
+        
+        commentInput.onkeypress = (e) => {
+          if (e.key === "Enter") sendComment.onclick();
+        };
       }
     });
+  }
+  
+  loadPosts();
+});
 </script>
 
 </body>
