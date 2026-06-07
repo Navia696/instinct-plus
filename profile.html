@@ -4,112 +4,426 @@
   <meta charset="UTF-8">
   <title>Instinct+ — Профіль</title>
   <link rel="stylesheet" href="style.css">
+
   <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-database-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-storage-compat.js"></script>
+
   <script src="firebase-init.js"></script>
+  <script src="notifications.js"></script>
 </head>
 
-<body class="profile-page" style="visibility:hidden">
+<body class="profile-page">
 
 <div class="inner-bg"></div>
 
 <header class="topbar">
-  <h1>Instinct+</h1>
+  <div class="topbar-left" style="display: flex; align-items: center; gap: 15px;">
+    <div class="notification-bell" onclick="toggleNotifications(event)">
+      <button class="bell-icon">🔔</button>
+      <span id="notificationBadge" class="notification-badge" style="display:none;">0</span>
+    </div>
+    <h1 class="site-title">Instinct+</h1>
+  </div>
   <div>
+    <button class="btn topbar-btn" onclick="location.href='home.html'">Головна</button>
     <button class="btn topbar-btn" onclick="location.href='edit-profile.html'">Редагувати профіль</button>
     <button class="btn logout" onclick="logout()">Вийти</button>
   </div>
+  
+  <div id="notificationsDropdown" class="notifications-dropdown">
+    <div style="padding:12px; font-weight:bold; border-bottom:1px solid #ddd; background:#000000; border-radius:12px 12px 0 0;">
+      📢 Сповіщення
+    </div>
+    <div id="notificationsList" style="max-height:350px; overflow-y:auto;"></div>
+  </div>
 </header>
 
-<div class="profile-wrapper">
+<div class="cover-photo">
+  <img id="cover" src="img/default-cover.jpg">
+</div>
 
-  <div class="cover-photo">
-    <img id="cover" src="img/default-cover.jpg">
+<div class="profile-header">
+  <img id="avatar" class="avatar" src="img/user.png">
+  <div class="profile-info">
+    <h2 id="nickname">Нікнейм</h2>
+    <p id="location" class="location-text">Країна: — | Місто: —</p>
   </div>
+</div>
 
-  <div class="profile-header">
-    <img id="avatar" class="avatar" src="img/user.png">
-    <div class="profile-info">
-      <h2 id="nickname">Нікнейм</h2>
-      <p class="friends-count">0 друзів</p>
+<div class="profile-columns">
+  <div class="profile-left">
+    <div class="info-box">
+      <h3>Інформація</h3>
+      <p id="age">Вік: —</p>
+      <p id="bio">Опис: —</p>
+      <p id="interests">Інтереси: —</p>
     </div>
   </div>
 
-  <div class="profile-content">
-    <h3>Інформація</h3>
-    <p id="age">Вік: —</p>
-    <p id="bio">Опис: —</p>
-    <p id="interests">Інтереси: —</p>
-
-    <h3>Мої публікації</h3>
-    <p id="no-posts">Тут будуть ваші пости.</p>
-    <div id="posts-container"></div>
+  <div class="profile-right">
+    <div class="posts-box">
+      <h3>Мої публікації</h3>
+      <div id="posts-container"></div>
+    </div>
   </div>
-
 </div>
 
+
+
 <script>
-  let currentUser;
+let currentUserGlobal = null;
 
-  function initProfile(user) {
-    currentUser = user;
-    document.body.style.visibility = "visible";
-    history.pushState(null, document.title, location.href);
-    window.addEventListener("popstate", () => {
-      history.pushState(null, document.title, location.href);
+function escapeHtml(str) {
+  if (!str) return "";
+  return str.replace(/[&<>]/g, function(m) {
+    if (m === "&") return "&amp;";
+    if (m === "<") return "&lt;";
+    if (m === ">") return "&gt;";
+    return m;
+  });
+}
+
+function goToUserProfile(userId) {
+  sessionStorage.setItem('viewingUserId', userId);
+  location.href = 'profile.html';
+}
+
+// Функция для фиксированной кнопки уведомлений
+function toggleNotificationsFixed(event) {
+  if (event) event.stopPropagation();
+  const dropdown = document.getElementById('notificationsDropdownFixed');
+  if (dropdown) {
+    const isShow = dropdown.style.display === 'block';
+    dropdown.style.display = isShow ? 'none' : 'block';
+    if (!isShow && typeof loadNotificationsFixed === 'function') {
+      loadNotificationsFixed();
+    }
+  }
+}
+
+// Загрузка уведомлений для фиксированной кнопки
+function loadNotificationsFixed() {
+  if (!currentUserGlobal) return;
+  
+  const notificationsRef = db.ref(`notifications/${currentUserGlobal.uid}`).orderByChild('createdAt').limitToLast(30);
+  
+  notificationsRef.once('value', (snapshot) => {
+    const notifications = [];
+    snapshot.forEach(child => {
+      notifications.push({ id: child.key, ...child.val() });
     });
+    notifications.reverse();
+    
+    const unreadCount = notifications.filter(n => !n.read).length;
+    const badge = document.getElementById('notificationBadgeFixed');
+    if (badge) {
+      if (unreadCount > 0) {
+        badge.style.display = 'inline-block';
+        badge.textContent = unreadCount > 99 ? '99+' : unreadCount;
+      } else {
+        badge.style.display = 'none';
+      }
+    }
+    
+    const list = document.getElementById('notificationsListFixed');
+    if (list) {
+      list.innerHTML = '';
+      if (notifications.length === 0) {
+        list.innerHTML = '<div style="padding:20px; color:#999; text-align:center;">📭 Немає сповіщень</div>';
+      } else {
+        notifications.forEach(notif => {
+          const div = document.createElement('div');
+          div.className = `notification-item-fixed ${notif.read ? '' : 'unread'}`;
+          div.style.cssText = `padding: 12px 15px; border-bottom: 1px solid #444; cursor: pointer; transition: background 0.2s; ${notif.read ? '' : 'background: #2a2a2a;'}`;
+          div.innerHTML = `
+            <div style="font-size: 14px; color: white;">${escapeHtml(notif.message)}</div>
+            <div style="font-size: 11px; color: #aaa; margin-top: 5px;">${getTimeAgo ? getTimeAgo(notif.createdAt) : new Date(notif.createdAt).toLocaleString()}</div>
+          `;
+          div.onclick = async () => {
+            await db.ref(`notifications/${currentUserGlobal.uid}/${notif.id}`).update({ read: true });
+            if (notif.type === 'match' && notif.fromUserId) {
+              sessionStorage.setItem('openChatWith', notif.fromUserId);
+              location.href = 'chat.html';
+            } else if (notif.type === 'like' && notif.fromUserId) {
+              sessionStorage.setItem('viewingUserId', notif.fromUserId);
+              location.href = 'profile.html';
+            } else if (notif.type === 'message' && notif.fromUserId) {
+              sessionStorage.setItem('openChatWith', notif.fromUserId);
+              location.href = 'chat.html';
+            } else if (notif.type === 'comment' && notif.postId) {
+              sessionStorage.setItem('scrollToPostId', notif.postId);
+              location.href = 'home.html';
+            }
+            div.style.background = '#1a1a1a';
+            loadNotificationsFixed();
+          };
+          list.appendChild(div);
+        });
+      }
+    }
+  });
+}
 
-    db.ref(`users/${user.uid}`).on('value', snapshot => {
-      const data = snapshot.val() || {};
-      nickname.innerText = data.nickname || "Нікнейм";
-      age.innerText = "Вік: " + (data.age || "—");
-      bio.innerText = "Опис: " + (data.bio || "—");
-      interests.innerText = "Інтереси: " + (data.interests || "—");
-
-      if (data.avatar) avatar.src = data.avatar;
-      if (data.cover) cover.src = data.cover;
-    });
-
-    db.ref('posts').orderByChild('createdAt').on('value', snap => {
-      const posts = [];
-      snap.forEach(child => {
-        const post = child.val();
-        if (post.userId === user.uid) {
-          posts.push(post);
+// Подписка на новые уведомления для обновления бейджа
+function subscribeToNotificationsFixed() {
+  if (!currentUserGlobal) return;
+  
+  db.ref(`notifications/${currentUserGlobal.uid}`).on('child_added', () => {
+    const badge = document.getElementById('notificationBadgeFixed');
+    if (badge) {
+      db.ref(`notifications/${currentUserGlobal.uid}`).once('value', (snap) => {
+        let unread = 0;
+        snap.forEach(child => {
+          if (!child.val().read) unread++;
+        });
+        if (unread > 0) {
+          badge.style.display = 'inline-block';
+          badge.textContent = unread > 99 ? '99+' : unread;
+        } else {
+          badge.style.display = 'none';
         }
       });
+    }
+  });
+}
 
-      posts.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
-      postsContainer.innerHTML = "";
+// Закрытие при клике вне
+document.addEventListener('click', (e) => {
+  const dropdown = document.getElementById('notificationsDropdownFixed');
+  const bell = document.querySelector('.notification-bell-fixed');
+  if (bell && dropdown && !bell.contains(e.target) && dropdown.style.display === 'block') {
+    dropdown.style.display = 'none';
+  }
+});
 
-      if (posts.length === 0) {
-        noPosts.style.display = "block";
-        return;
-      }
-      noPosts.style.display = "none";
-
-      posts.forEach(post => {
-        const div = document.createElement("div");
-        div.className = "post";
-        div.innerHTML = `<p>${post.text}</p>`;
-        postsContainer.appendChild(div);
+auth.onAuthStateChanged(async user => {
+  if (!user) {
+    location.replace("login.html");
+    return;
+  }
+  
+  currentUserGlobal = user;
+  
+  // Инициализация онлайна
+  if (typeof initOnlineStatus === 'function') {
+    initOnlineStatus(user.uid);
+  }
+  
+  // Инициализация уведомлений
+  if (typeof initNotifications === 'function') {
+    initNotifications(user.uid);
+  }
+  
+  // Инициализация фиксированных уведомлений
+  loadNotificationsFixed();
+  subscribeToNotificationsFixed();
+  
+  let viewingUserId = sessionStorage.getItem('viewingUserId');
+  let isOwnProfile = !viewingUserId || viewingUserId === user.uid;
+  let profileUserId = isOwnProfile ? user.uid : viewingUserId;
+  
+  // Загрузка профиля
+  db.ref(`users/${profileUserId}`).on("value", snap => {
+    const d = snap.val() || {};
+    document.getElementById("nickname").innerText = d.nickname || "Користувач";
+    document.getElementById("age").innerText = "Вік: " + (d.age || "—");
+    document.getElementById("bio").innerText = "Опис: " + (d.bio || "—");
+    document.getElementById("interests").innerText = "Інтереси: " + (d.interests || "—");
+    document.getElementById("location").innerHTML = `Країна: ${d.country || "—"} | Місто: ${d.city || "—"}`;
+    if (d.avatar) document.getElementById("avatar").src = d.avatar;
+    if (d.cover) document.getElementById("cover").src = d.cover;
+  });
+  
+  function loadPosts() {
+    db.ref("posts").orderByChild("createdAt").on("value", async (snapshot) => {
+      const posts = [];
+      snapshot.forEach(child => {
+        const post = child.val();
+        if (post.userId === profileUserId) {
+          posts.push({ id: child.key, ...post });
+        }
       });
-    });
-  }
-
-  if (auth.currentUser) {
-    initProfile(auth.currentUser);
-  } else {
-    auth.onAuthStateChanged(user => {
-      if (!user) {
-        location.replace("login.html");
+      posts.reverse();
+      
+      const container = document.getElementById("posts-container");
+      container.innerHTML = "";
+      
+      if (posts.length === 0) {
+        container.innerHTML = "<p style='text-align:center;color:#999;padding:20px;'>Немає постів</p>";
         return;
       }
-      initProfile(user);
+      
+      for (const post of posts) {
+        const userSnap = await db.ref(`users/${post.userId}`).once("value");
+        const author = userSnap.val() || {};
+        
+        const likesSnap = await db.ref(`likes/${post.id}`).once("value");
+        const likesCount = likesSnap.exists() ? Object.keys(likesSnap.val()).length : 0;
+        const userLike = await db.ref(`likes/${post.id}/${user.uid}`).once("value");
+        
+        const postDiv = document.createElement("div");
+        postDiv.className = "post";
+        postDiv.style.cssText = "margin-bottom:20px;padding:15px;background:white;border-radius:8px;box-shadow:0 1px 3px rgba(0,0,0,0.1);";
+        postDiv.innerHTML = `
+          <div style="margin-bottom:10px;">
+            <div style="display: flex; align-items: center; gap: 8px;">
+              <b class="user-nickname" data-user-id="${post.userId}" style="font-size:16px;cursor:pointer;color:#333;text-decoration:none;">${escapeHtml(author.nickname || "Користувач")}</b>
+            </div>
+            <div style="font-size:11px;color:#999;margin-top:5px;">${new Date(post.createdAt).toLocaleString()}</div>
+          </div>
+          <div style="margin-bottom:15px;font-size:15px;">${escapeHtml(post.text)}</div>
+          <div style="display:flex;gap:20px;align-items:center;border-top:1px solid #eee;padding-top:10px;">
+            <button class="like-btn" data-id="${post.id}" style="background:none;border:none;font-size:20px;cursor:pointer;opacity:${userLike.exists() ? '1' : '0.5'};">❤️</button>
+            <span class="like-count" data-id="${post.id}" style="font-size:14px;color:#666;">${likesCount}</span>
+            <button class="comment-toggle" data-id="${post.id}" style="background:none;border:none;font-size:14px;cursor:pointer;color:#666;">💬 Коментарі</button>
+          </div>
+          <div class="comments-area" data-id="${post.id}" style="display:none;margin-top:15px;padding-left:20px;border-left:3px solid #007bff;">
+            <div class="comments-list" data-id="${post.id}" style="margin-bottom:10px;max-height:300px;overflow-y:auto;"></div>
+            <div style="display:flex;gap:10px;margin-top:10px;">
+              <input type="text" class="comment-input" data-id="${post.id}" placeholder="Написати коментар..." style="flex:1;padding:8px;border:1px solid #ddd;border-radius:4px;">
+              <button class="send-comment" data-id="${post.id}" style="padding:8px 15px;background:#007bff;color:white;border:none;border-radius:4px;cursor:pointer;">Відправити</button>
+            </div>
+          </div>
+        `;
+        
+        container.appendChild(postDiv);
+        
+        // Клик по никнейму
+        const userNickname = postDiv.querySelector(".user-nickname");
+        userNickname.onclick = (e) => {
+          e.stopPropagation();
+          goToUserProfile(userNickname.getAttribute('data-user-id'));
+        };
+        
+        // Лайк
+        const likeBtn = postDiv.querySelector(".like-btn");
+        const likeSpan = postDiv.querySelector(".like-count");
+        
+        likeBtn.onclick = async () => {
+          const likeRef = db.ref(`likes/${post.id}/${user.uid}`);
+          const exists = (await likeRef.once("value")).exists();
+          if (exists) {
+            await likeRef.remove();
+            likeBtn.style.opacity = "0.5";
+          } else {
+            await likeRef.set(true);
+            likeBtn.style.opacity = "1";
+            if (post.userId !== user.uid && typeof sendNotification === 'function') {
+              await sendNotification(post.userId, 'like', user.uid, post.id);
+            }
+          }
+        };
+        
+        db.ref(`likes/${post.id}`).on("value", (snap) => {
+          likeSpan.textContent = Object.keys(snap.val() || {}).length;
+        });
+        
+        // ========== КОММЕНТАРИИ ==========
+        const commentToggle = postDiv.querySelector(".comment-toggle");
+        const commentsArea = postDiv.querySelector(".comments-area");
+        const commentsList = postDiv.querySelector(".comments-list");
+        const commentInput = postDiv.querySelector(".comment-input");
+        const sendComment = postDiv.querySelector(".send-comment");
+        
+        function refreshCommentsList() {
+          db.ref(`comments/${post.id}`).once("value", async (snap) => {
+            commentsList.innerHTML = "";
+            
+            if (!snap.exists()) {
+              commentsList.innerHTML = "<div style='color:#999;padding:10px;text-align:center;'>📝 Немає коментарів</div>";
+              commentToggle.innerHTML = "💬 Коментарі (0)";
+              return;
+            }
+            
+            const comments = [];
+            snap.forEach(c => comments.push({ id: c.key, ...c.val() }));
+            comments.sort((a,b) => a.createdAt - b.createdAt);
+            commentToggle.innerHTML = `💬 Коментарі (${comments.length})`;
+            
+            for (const comment of comments) {
+              const authorSnap = await db.ref(`users/${comment.userId}`).once("value");
+              const commentAuthor = authorSnap.val() || {};
+              const commentDiv = document.createElement("div");
+              commentDiv.style.cssText = "padding:8px;margin-bottom:8px;background:#f8f9fa;border-radius:8px;";
+              commentDiv.innerHTML = `
+                <div style="display:flex;justify-content:space-between;margin-bottom:5px;">
+                  <b style="font-size:12px;color:#007bff;cursor:pointer;" class="comment-user" data-user-id="${comment.userId}">${escapeHtml(commentAuthor.nickname || "Користувач")}</b>
+                  <small style="color:#999;font-size:10px;">${new Date(comment.createdAt).toLocaleTimeString()}</small>
+                </div>
+                <div style="font-size:13px;">${escapeHtml(comment.text)}</div>
+              `;
+              commentsList.appendChild(commentDiv);
+              
+              const commentUserSpan = commentDiv.querySelector(".comment-user");
+              if (commentUserSpan) {
+                commentUserSpan.onclick = (e) => {
+                  e.stopPropagation();
+                  goToUserProfile(commentUserSpan.getAttribute('data-user-id'));
+                };
+              }
+            }
+          });
+        }
+        
+        commentToggle.onclick = () => {
+          if (commentsArea.style.display === "none") {
+            commentsArea.style.display = "block";
+            refreshCommentsList();
+          } else {
+            commentsArea.style.display = "none";
+          }
+        };
+        
+        sendComment.onclick = async () => {
+          const text = commentInput.value.trim();
+          if (!text) {
+            alert("Напишіть коментар!");
+            return;
+          }
+          
+          sendComment.disabled = true;
+          sendComment.textContent = "⏳...";
+          
+          try {
+            await db.ref(`comments/${post.id}`).push({
+              text: text,
+              userId: user.uid,
+              createdAt: Date.now()
+            });
+            commentInput.value = "";
+            console.log("✅ Комментарий отправлен");
+            
+            if (commentsArea.style.display === "block") {
+              refreshCommentsList();
+            } else {
+              const snap = await db.ref(`comments/${post.id}`).once("value");
+              const count = snap.exists() ? snap.numChildren() : 0;
+              commentToggle.innerHTML = `💬 Коментарі (${count})`;
+            }
+            
+            if (post.userId !== user.uid && typeof sendNotification === 'function') {
+              await sendNotification(post.userId, 'comment', user.uid, post.id, text);
+            }
+          } catch (error) {
+            console.error("Ошибка:", error);
+            alert("Помилка: " + error.message);
+          } finally {
+            sendComment.disabled = false;
+            sendComment.textContent = "Відправити";
+          }
+        };
+        
+        commentInput.onkeypress = (e) => {
+          if (e.key === "Enter") sendComment.onclick();
+        };
+      }
     });
   }
+  
+  loadPosts();
+});
 </script>
 
 </body>
